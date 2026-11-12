@@ -23,8 +23,8 @@ jobs:
           $src = $src.Replace('DEFAULT_REPO = ""', 'DEFAULT_REPO = "' + $env:GITHUB_REPOSITORY + '"')
           [System.IO.File]::WriteAllText("$PWD/dhub.py", $src, (New-Object System.Text.UTF8Encoding($false)))
           "v=$v" >> $env:GITHUB_OUTPUT
-      - run: pip install pyinstaller
-      - run: pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." dhub.py
+      - run: pip install pyinstaller pywebview
+      - run: pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." --collect-all webview --hidden-import clr dhub.py
       - name: Installer bauen
         shell: pwsh
         env:

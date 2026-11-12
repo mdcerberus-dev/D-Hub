@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.4 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.5 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.4"
+VERSION = "1.5"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -311,13 +311,18 @@ def open_window(url):
         webbrowser.open(url)
 
 
+WINMODE = ["noch nicht gestartet"]
+
+
 def run_window(url):
     """Eigenes Programmfenster (WebView2, ohne Edge-Optik). Blockiert bis das Fenster zu ist.
     Gibt False zurueck, wenn das nicht moeglich ist, dann greift der Edge-App-Modus."""
     if not IS_WIN:
+        WINMODE[0] = "Edge/Browser (kein Windows)"
         return False
     try:
         import webview
+        WINMODE[0] = "eigenes Programmfenster (WebView2)"
         webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805")
         data = os.path.join(HERE, "webview-data")
         try:
@@ -326,7 +331,7 @@ def run_window(url):
             webview.start(gui="edgechromium")
         return True
     except Exception as e:
-        LIB["diag"] = ["Eigenes Fenster nicht moeglich (%s: %s), Edge-Fenster wird benutzt." % (type(e).__name__, e)]
+        WINMODE[0] = "Edge-Fallback, weil: %s: %s" % (type(e).__name__, e)
         return False
 
 
@@ -965,7 +970,7 @@ def state():
         g["manual"] = manual
         g["price"] = manual if manual is not None else (lp or {}).get("v")
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
-    return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=LIB["diag"], perr=LIB["perr"],
+    return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]], perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
                 errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 

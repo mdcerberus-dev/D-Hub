@@ -1,0 +1,27 @@
+﻿NUTZUNGSBEDINGUNGEN FÜR D-HUB
+
+Bitte lies diese Bedingungen. Mit dem Klick auf "Ich akzeptiere die Vereinbarung" stimmst du ihnen zu.
+
+1. Was D-Hub ist
+D-Hub ist ein kostenloses Programm, das deine Spielebibliotheken (z. B. Steam, Epic, GOG) in einer Oberfläche anzeigt und Spiele über die jeweiligen Launcher startet.
+
+2. Keine Verbindung zu den Anbietern
+D-Hub steht in keiner Verbindung zu Valve (Steam), Epic Games, GOG, Ubisoft, Electronic Arts, Blizzard, Microsoft oder anderen genannten Anbietern. Alle Namen und Marken gehören ihren jeweiligen Inhabern. Du bleibst selbst dafür verantwortlich, die Nutzungsbedingungen der Anbieter einzuhalten.
+
+3. Nutzung auf eigene Verantwortung
+D-Hub wird so bereitgestellt, wie es ist (Beta-Version), ohne Zusicherung, dass es fehlerfrei oder dauerhaft verfügbar ist. Die Nutzung erfolgt auf eigene Verantwortung. Für Schäden haftet der Herausgeber nur bei Vorsatz und grober Fahrlässigkeit, soweit gesetzlich zulässig.
+
+4. Daten und Datenschutz
+- D-Hub arbeitet lokal auf deinem Computer. Einstellungen, Preise und deine Bibliothek werden im Installationsordner gespeichert (Datei hub_data.json). Passwörter speichert D-Hub nicht.
+- Für seine Funktionen ruft D-Hub Daten von Diensten im Internet ab. Dabei wird deine IP-Adresse an diese Dienste übertragen: Steam (Spieleliste, Preise), GOG (Preise), CheapShark und Frankfurter (Preise und Wechselkurs) sowie GitHub (Updates und Neuigkeiten).
+- Der eingebettete Reiter "KumpelFunk" lädt eine externe Seite eines Drittanbieters. Dafür gelten dessen eigene Bedingungen und Datenschutzregeln. Mikrofon und Kamera werden nur nach deiner ausdrücklichen Erlaubnis im Browser verwendet.
+- Dein Steam-API-Schlüssel (falls du einen einträgst) wird nur lokal gespeichert.
+
+5. Updates
+D-Hub sucht regelmäßig nach neuen Versionen und installiert sie standardmäßig automatisch beim Start. Das kannst du in den Einstellungen unter "Allgemein" abschalten. Wichtige Updates (z. B. Sicherheitskorrekturen) kann der Herausgeber verpflichtend machen. Sie werden dann nach kurzer Ankündigung installiert, solange die automatische Update-Suche eingeschaltet ist. Der Herausgeber kann Updates auch pausieren. Updates kommen ausschließlich aus dem Repository des Herausgebers.
+
+6. Weitergabe
+Du darfst D-Hub unverändert und kostenlos an andere weitergeben.
+
+7. Beenden
+Du kannst D-Hub jederzeit über die Windows-Einstellungen (Apps) oder die Verknüpfung "D-Hub deinstallieren" entfernen.

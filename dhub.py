@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.6 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.7 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.6"
+VERSION = "1.7"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -334,7 +334,15 @@ def run_window(url):
     try:
         import webview
         WINMODE[0] = "eigenes Programmfenster (WebView2)"
-        webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805")
+        win = webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805")
+        WIN[0] = win
+
+        def on_closing():
+            if OV["on"] and OV["showkf"]:  # KumpelFunk laeuft in diesem Fenster: weiterlaufen lassen, nur verstecken
+                OV["hidden"] = True
+                win.hide()
+                return False
+        win.events.closing += on_closing
         data = os.path.join(HERE, "webview-data")
         try:
             webview.start(gui="edgechromium", private_mode=False, storage_path=data)
@@ -618,6 +626,374 @@ def worker():
                 threading.Thread(target=run_dl, args=(q[0],), daemon=True).start()
 
 
+# ---------- Ingame-Overlay (Fadenkreuz, FPS, KumpelFunk) ----------
+OV = dict(on=False, visible=True, cross=None, showfps=False, showkf=False, fps=0.0, fpsmsg="", members=[], bubbles=[],
+          hwnd=0, err="", hidden=False, fpsproc=None)
+WIN = [None]
+GCFG_DEF = dict(cross=False, cstyle="cross", ccolor="#5cff0c", csize=12, cgap=4, cthick=2, fps=False, kf=False)
+
+
+def gamecfg(gid):
+    c = dict(GCFG_DEF)
+    c.update((store.get("gamecfg") or {}).get(gid, {}))
+    return c
+
+
+def clean_cfg(c):
+    c = c if isinstance(c, dict) else {}
+    out = dict(GCFG_DEF)
+    for k in ("cross", "fps", "kf"):
+        out[k] = bool(c.get(k))
+    out["cstyle"] = c.get("cstyle") if c.get("cstyle") in ("cross", "plus", "dot", "circle") else "cross"
+    col = str(c.get("ccolor") or "")
+    out["ccolor"] = col if re.fullmatch(r"#[0-9a-fA-F]{6}", col) else GCFG_DEF["ccolor"]
+    for k, lo, hi in (("csize", 2, 60), ("cgap", 0, 30), ("cthick", 1, 8)):
+        try:
+            out[k] = max(lo, min(hi, int(c.get(k, GCFG_DEF[k]))))
+        except (TypeError, ValueError):
+            out[k] = GCFG_DEF[k]
+    return out
+
+
+def ov_apply(cfg):
+    OV["cross"] = cfg if cfg.get("cross") else None
+    OV["showfps"] = bool(cfg.get("fps"))
+    OV["showkf"] = bool(cfg.get("kf"))
+    if OV["cross"] or OV["showfps"] or OV["showkf"]:
+        ov_start()
+        if OV["showfps"]:
+            threading.Thread(target=fps_loop, daemon=True).start()
+    else:
+        ov_stop()
+
+
+def ov_start():
+    if not IS_WIN or OV["on"]:
+        return
+    OV["on"], OV["err"], OV["visible"] = True, "", True
+    threading.Thread(target=_ov_thread, daemon=True).start()
+
+
+def ov_stop():
+    OV["showfps"] = OV["showkf"] = False
+    OV["cross"] = None
+    stop_fps()
+    try:
+        if OV["hwnd"]:
+            import ctypes
+            ctypes.windll.user32.PostMessageW(ctypes.c_void_p(OV["hwnd"]), 0x0010, 0, 0)
+    except Exception:
+        pass
+    if OV["hidden"] and WIN[0]:  # versteckt weitergelaufenes D-Hub-Fenster jetzt wirklich schliessen
+        try:
+            WIN[0].destroy()
+        except Exception:
+            pass
+
+
+def ov_bubble(sender, text):
+    if OV["on"] and OV["showkf"]:
+        OV["bubbles"] = (OV["bubbles"] + [(clean_name(sender) or "KumpelFunk", str(text)[:140], time.time() + 9)])[-4:]
+
+
+def ov_voice(members):
+    out = []
+    for m in (members or [])[:8]:
+        if isinstance(m, dict) and clean_name(m.get("name")):
+            out.append(dict(name=clean_name(m["name"]), speaking=bool(m.get("speaking"))))
+    OV["members"] = out
+
+
+def _hex(c):
+    r, g, b = int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
+    if (r, g, b) == (255, 0, 255):
+        g = 1
+    return r | g << 8 | b << 16
+
+
+def _ov_thread():
+    try:
+        import ctypes
+        from ctypes import wintypes as W
+        u, g, k = ctypes.windll.user32, ctypes.windll.gdi32, ctypes.windll.kernel32
+        H, I, LR = ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t
+
+        def sig(f, res, *a):
+            f.restype, f.argtypes = res, list(a)
+        WNDPROC = ctypes.WINFUNCTYPE(LR, H, W.UINT, W.WPARAM, W.LPARAM)
+
+        class WNDCLASS(ctypes.Structure):
+            _fields_ = [("style", W.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", I), ("cbWndExtra", I), ("hInstance", H),
+                        ("hIcon", H), ("hCursor", H), ("hbrBackground", H), ("lpszMenuName", W.LPCWSTR), ("lpszClassName", W.LPCWSTR)]
+
+        class PS(ctypes.Structure):
+            _fields_ = [("hdc", H), ("fErase", W.BOOL), ("rc", W.RECT), ("fRestore", W.BOOL), ("fInc", W.BOOL), ("res", ctypes.c_byte * 32)]
+        sig(k.GetModuleHandleW, H, W.LPCWSTR)
+        sig(u.DefWindowProcW, LR, H, W.UINT, W.WPARAM, W.LPARAM)
+        sig(u.RegisterClassW, W.ATOM, ctypes.POINTER(WNDCLASS))
+        sig(u.CreateWindowExW, H, W.DWORD, W.LPCWSTR, W.LPCWSTR, W.DWORD, I, I, I, I, H, H, H, H)
+        sig(u.SetLayeredWindowAttributes, W.BOOL, H, W.COLORREF, W.BYTE, W.DWORD)
+        sig(u.BeginPaint, H, H, ctypes.POINTER(PS))
+        sig(u.EndPaint, W.BOOL, H, ctypes.POINTER(PS))
+        sig(u.FillRect, I, H, ctypes.POINTER(W.RECT), H)
+        sig(u.DrawTextW, I, H, W.LPCWSTR, I, ctypes.POINTER(W.RECT), W.UINT)
+        sig(u.ShowWindow, W.BOOL, H, I)
+        sig(u.SetWindowPos, W.BOOL, H, H, I, I, I, I, W.UINT)
+        sig(u.InvalidateRect, W.BOOL, H, H, W.BOOL)
+        sig(u.SetTimer, ctypes.c_size_t, H, ctypes.c_size_t, W.UINT, H)
+        sig(u.RegisterHotKey, W.BOOL, H, I, W.UINT, W.UINT)
+        sig(u.GetMessageW, W.BOOL, ctypes.POINTER(W.MSG), H, W.UINT, W.UINT)
+        sig(u.TranslateMessage, W.BOOL, ctypes.POINTER(W.MSG))
+        sig(u.DispatchMessageW, LR, ctypes.POINTER(W.MSG))
+        sig(u.PostMessageW, W.BOOL, H, W.UINT, W.WPARAM, W.LPARAM)
+        sig(u.PostQuitMessage, None, I)
+        sig(u.DestroyWindow, W.BOOL, H)
+        sig(g.CreateSolidBrush, H, W.COLORREF)
+        sig(g.DeleteObject, W.BOOL, H)
+        sig(g.DeleteDC, W.BOOL, H)
+        sig(g.CreateCompatibleDC, H, H)
+        sig(g.CreateCompatibleBitmap, H, H, I, I)
+        sig(g.SelectObject, H, H, H)
+        sig(g.BitBlt, W.BOOL, H, I, I, I, I, H, I, I, W.DWORD)
+        sig(g.SetTextColor, W.COLORREF, H, W.COLORREF)
+        sig(g.SetBkMode, I, H, I)
+        sig(g.Ellipse, W.BOOL, H, I, I, I, I)
+        sig(g.RoundRect, W.BOOL, H, I, I, I, I, I, I)
+        sig(g.CreatePen, H, I, I, W.COLORREF)
+        sig(g.GetStockObject, H, I)
+        sig(g.CreateFontW, H, I, I, I, I, I, I, I, I, I, I, I, I, I, W.LPCWSTR)
+        try:
+            u.SetProcessDPIAware()
+        except Exception:
+            pass
+        sw, sh = u.GetSystemMetrics(0), u.GetSystemMetrics(1)
+        KEY = 0x00FF00FF
+        fonts = {}
+
+        def font(h, bold):
+            if (h, bold) not in fonts:
+                fonts[(h, bold)] = g.CreateFontW(-h, 0, 0, 0, 700 if bold else 500, 0, 0, 0, 1, 0, 0, 3, 0, "Segoe UI")
+            return fonts[(h, bold)]
+
+        def rect(dc, x1, y1, x2, y2, col):
+            br = g.CreateSolidBrush(col)
+            r = W.RECT(int(x1), int(y1), int(x2), int(y2))
+            u.FillRect(dc, ctypes.byref(r), br)
+            g.DeleteObject(br)
+
+        def text(dc, s, x, y, w, h, col, size=14, bold=False, flags=0x8000 | 0x20 | 0x800):
+            g.SelectObject(dc, font(size, bold))
+            g.SetBkMode(dc, 1)
+            for dx, dy, c in ((1, 1, 0x000000), (0, 0, col)):
+                g.SetTextColor(dc, c)
+                r = W.RECT(int(x + dx), int(y + dy), int(x + w + dx), int(y + h + dy))
+                u.DrawTextW(dc, s, -1, ctypes.byref(r), flags)
+
+        def draw(dc):
+            rect(dc, 0, 0, sw, sh, KEY)
+            c = OV["cross"]
+            if c:
+                col, cx, cy, s, gap, t = _hex(c["ccolor"]), sw // 2, sh // 2, c["csize"], c["cgap"], c["cthick"]
+                h = t // 2
+                st = c["cstyle"]
+                if st in ("cross", "plus"):
+                    gp = gap if st == "cross" else 0
+                    rect(dc, cx - gp - s, cy - h, cx - gp, cy - h + t, col)
+                    rect(dc, cx + gp, cy - h, cx + gp + s, cy - h + t, col)
+                    rect(dc, cx - h, cy - gp - s, cx - h + t, cy - gp, col)
+                    rect(dc, cx - h, cy + gp, cx - h + t, cy + gp + s, col)
+                    if st == "plus":
+                        rect(dc, cx - h, cy - h, cx - h + t, cy - h + t, col)
+                elif st == "dot":
+                    rect(dc, cx - t - 1, cy - t - 1, cx + t + 2, cy + t + 2, col)
+                else:
+                    pen, old = g.CreatePen(0, t, col), None
+                    old = g.SelectObject(dc, pen)
+                    ob = g.SelectObject(dc, g.GetStockObject(5))
+                    g.Ellipse(dc, cx - s, cy - s, cx + s, cy + s)
+                    g.SelectObject(dc, ob)
+                    g.SelectObject(dc, old)
+                    g.DeleteObject(pen)
+                    rect(dc, cx - 1, cy - 1, cx + 2, cy + 2, col)
+            if OV["showfps"]:
+                label = "FPS %d" % round(OV["fps"]) if OV["fps"] > 0 else (OV["fpsmsg"] or "FPS …")
+                text(dc, label, sw - 460, 14, 440, 30, 0x0CFF5C, 22 if OV["fps"] > 0 else 14, True, 0x2 | 0x20 | 0x800)
+            if OV["showkf"]:
+                y = 18
+                for m in OV["members"]:
+                    sp = m["speaking"]
+                    pen = g.CreatePen(0, 3, 0x0CFF5C if sp else 0x555555)
+                    br = g.CreateSolidBrush(0x1A1F1A)
+                    op, ob = g.SelectObject(dc, pen), g.SelectObject(dc, br)
+                    g.Ellipse(dc, 18, y, 54, y + 36)
+                    g.SelectObject(dc, op)
+                    g.SelectObject(dc, ob)
+                    g.DeleteObject(pen)
+                    g.DeleteObject(br)
+                    text(dc, m["name"][:1].upper(), 18, y + 6, 36, 26, 0xFFFFFF, 17, True, 0x1 | 0x20 | 0x800)
+                    text(dc, m["name"], 62, y + 8, 230, 22, 0x0CFF5C if sp else 0xDDDDDD, 15, sp)
+                    y += 44
+                y += 6
+                now = time.time()
+                OV["bubbles"] = [b for b in OV["bubbles"] if b[2] > now]
+                for who, tx, _ in OV["bubbles"]:
+                    pen, br = g.CreatePen(0, 1, 0x0CFF5C), g.CreateSolidBrush(0x141814)
+                    op, ob = g.SelectObject(dc, pen), g.SelectObject(dc, br)
+                    g.RoundRect(dc, 18, y, 430, y + 34, 14, 14)
+                    g.SelectObject(dc, op)
+                    g.SelectObject(dc, ob)
+                    g.DeleteObject(pen)
+                    g.DeleteObject(br)
+                    text(dc, "%s: %s" % (who, tx), 30, y + 6, 390, 24, 0xFFFFFF, 15)
+                    y += 40
+
+        def proc(hwnd, msg, wp, lp):
+            try:
+                if msg == 0x000F:
+                    ps = PS()
+                    hdc = u.BeginPaint(hwnd, ctypes.byref(ps))
+                    mdc = g.CreateCompatibleDC(hdc)
+                    bmp = g.CreateCompatibleBitmap(hdc, sw, sh)
+                    old = g.SelectObject(mdc, bmp)
+                    draw(mdc)
+                    g.BitBlt(hdc, 0, 0, sw, sh, mdc, 0, 0, 0x00CC0020)
+                    g.SelectObject(mdc, old)
+                    g.DeleteObject(bmp)
+                    g.DeleteDC(mdc)
+                    u.EndPaint(hwnd, ctypes.byref(ps))
+                    return 0
+                if msg == 0x0113:
+                    u.SetWindowPos(hwnd, H(-1), 0, 0, 0, 0, 0x13)
+                    u.InvalidateRect(hwnd, None, False)
+                    return 0
+                if msg == 0x0312:
+                    if wp == 1:
+                        OV["visible"] = not OV["visible"]
+                        u.ShowWindow(hwnd, 4 if OV["visible"] else 0)
+                    else:
+                        ov_stop()
+                    return 0
+                if msg == 0x0014:
+                    return 1
+                if msg == 0x0010:
+                    u.DestroyWindow(hwnd)
+                    return 0
+                if msg == 0x0002:
+                    u.PostQuitMessage(0)
+                    return 0
+            except Exception:
+                return 0
+            return u.DefWindowProcW(hwnd, msg, wp, lp)
+        cb = WNDPROC(proc)
+        wc = WNDCLASS()
+        wc.lpfnWndProc, wc.hInstance, wc.lpszClassName = cb, k.GetModuleHandleW(None), "DHubOverlay"
+        u.RegisterClassW(ctypes.byref(wc))
+        # TOPMOST | LAYERED | TRANSPARENT (Klicks gehen durch) | TOOLWINDOW | NOACTIVATE
+        hwnd = u.CreateWindowExW(0x8 | 0x80000 | 0x20 | 0x80 | 0x08000000, "DHubOverlay", "D-Hub Overlay", 0x80000000,
+                                 0, 0, sw, sh, None, None, wc.hInstance, None)
+        if not hwnd:
+            raise OSError("Overlay-Fenster konnte nicht erstellt werden")
+        OV["hwnd"] = hwnd
+        u.SetLayeredWindowAttributes(hwnd, KEY, 0, 1)
+        u.ShowWindow(hwnd, 4)
+        u.SetTimer(hwnd, 1, 250, None)
+        u.RegisterHotKey(hwnd, 1, 0x2 | 0x4, 0x78)  # Strg+Umschalt+F9: ein/aus
+        u.RegisterHotKey(hwnd, 2, 0x2 | 0x4, 0x79)  # Strg+Umschalt+F10: Overlay beenden
+        msg = W.MSG()
+        while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            u.TranslateMessage(ctypes.byref(msg))
+            u.DispatchMessageW(ctypes.byref(msg))
+    except Exception as e:
+        OV["err"] = "%s: %s" % (type(e).__name__, e)
+    OV["on"], OV["hwnd"] = False, 0
+    stop_fps()
+
+
+# FPS: Windows verraet die FPS eines fremden Spiels nicht von selbst. Dafuer nutzt D-Hub das kostenlose Intel-Tool PresentMon.
+def presentmon_path():
+    for f in sorted(glob.glob(os.path.join(HERE, "PresentMon*.exe"))):
+        return f
+    OV["fpsmsg"] = "Lade PresentMon …"
+    req = urllib.request.Request("https://api.github.com/repos/GameTechDev/PresentMon/releases/latest", headers={"User-Agent": "D-Hub/" + VERSION})
+    rel = json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
+    for a in rel.get("assets", []):
+        if re.fullmatch(r"PresentMon.*x64\.exe", a.get("name", "")) and a["browser_download_url"].startswith("https://github.com/GameTechDev/PresentMon/"):
+            data = urllib.request.urlopen(urllib.request.Request(a["browser_download_url"], headers={"User-Agent": "D-Hub"}), timeout=120).read()
+            if data[:2] == b"MZ" and len(data) > 100000:
+                p = os.path.join(HERE, "PresentMon.exe")
+                open(p, "wb").write(data)
+                return p
+    raise RuntimeError("PresentMon nicht gefunden")
+
+
+def stop_fps():
+    p, OV["fpsproc"] = OV["fpsproc"], None
+    if p:
+        try:
+            p.kill()
+        except Exception:
+            pass
+
+
+def fg_pid():
+    import ctypes
+    u = ctypes.windll.user32
+    pid = ctypes.c_ulong(0)
+    u.GetWindowThreadProcessId(u.GetForegroundWindow(), ctypes.byref(pid))
+    return str(pid.value)
+
+
+def fps_loop():
+    if not IS_WIN or OV["fpsproc"]:
+        return
+    try:
+        exe = presentmon_path()
+    except Exception as e:
+        OV["fpsmsg"] = "FPS: PresentMon fehlt (%s)" % e
+        return
+    for args in (["--output_stdout", "--no_console_stats", "--stop_existing_session"], ["-output_stdout", "-stop_existing_session"]):
+        try:
+            p = subprocess.Popen([exe] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=0x08000000, text=True, errors="replace")
+        except OSError as e:
+            OV["fpsmsg"] = "FPS: PresentMon startet nicht (%s)" % e
+            return
+        OV["fpsproc"] = p
+        OV["fpsmsg"] = "FPS: warte auf Spiel …"
+        cols, frames, last, got, lines = None, {}, 0, False, []
+        for line in p.stdout:
+            if not OV["fpsproc"]:
+                return
+            parts = line.strip().split(",")
+            if cols is None:
+                if "," in line and any(x in parts for x in ("ProcessID", "ProcessName", "Application")):
+                    cols = {n: i for i, n in enumerate(parts)}
+                else:
+                    lines.append(line.strip())
+                continue
+            try:
+                ms = float(parts[next(cols[n] for n in ("MsBetweenPresents", "msBetweenPresents", "FrameTime") if n in cols)])
+                pid = parts[cols["ProcessID"]] if "ProcessID" in cols else parts[cols.get("ProcessName", cols.get("Application", 0))]
+            except (StopIteration, ValueError, IndexError, KeyError):
+                continue
+            got = True
+            fl = frames.setdefault(pid, [])
+            fl.append((time.time(), ms))
+            del fl[:-40]
+            if time.time() - last > 0.5:
+                last = time.time()
+                try:
+                    fl = frames.get(fg_pid()) or max(frames.values(), key=lambda x: x[-1][0])
+                    OV["fps"] = 1000.0 / max(0.01, sum(m for _, m in fl) / len(fl)) if time.time() - fl[-1][0] < 3 else 0.0
+                except Exception:
+                    pass
+        if got or not OV["fpsproc"]:
+            return
+        OV["fpsproc"] = None
+        if args[0] == "-output_stdout":
+            tail = " ".join(lines)[-120:]
+            OV["fpsmsg"] = "FPS braucht Admin-Rechte (D-Hub als Administrator starten)" if re.search(r"admin|privileg|Performance Log", tail, re.I) else "FPS: PresentMon-Fehler"
+
+
 def launch(gid, st, install=False):
     for g in LIB["games"]:
         if g["id"] == gid:
@@ -633,6 +1009,9 @@ def launch(gid, st, install=False):
                         os.startfile(l)
                     else:
                         print("Demo-Start:", g["title"], st)
+                    cfg = gamecfg(gid)
+                    if cfg["cross"] or cfg["fps"] or cfg["kf"]:
+                        ov_apply(cfg)
                 elif install and IS_WIN:
                     os.startfile(("steam://install/" if st == "Steam" else "goggalaxy://openGameView/") + v["sid"])
 
@@ -932,6 +1311,17 @@ def do_action(b):
                 pass
             subprocess.Popen([un], cwd=HERE, close_fds=True)
             threading.Thread(target=lambda: (time.sleep(1.5), os._exit(0)), daemon=True).start()
+    elif n == "gamecfg" and isinstance(b.get("id"), str):
+        store.setdefault("gamecfg", {})[b["id"][:80]] = clean_cfg(b.get("cfg"))
+        save()
+        if OV["on"]:
+            ov_apply(gamecfg(b["id"]))
+    elif n == "ovstart" and IS_WIN and isinstance(b.get("id"), str):
+        ov_apply(gamecfg(b["id"]))
+    elif n == "ovstop":
+        ov_stop()
+    elif n == "kfvoice":
+        ov_voice(b.get("members"))
     elif n == "opendata" and IS_WIN:
         os.startfile(HERE)
     elif n == "clearprices":
@@ -956,6 +1346,7 @@ def do_action(b):
         mid = ("kf-msg-" + str(b["id"])[:40]) if b.get("id") else None
         if str(b.get("text") or "").strip():
             inbox_add("msg", str(b["text"]).strip(), sender=clean_name(b.get("from")) or "KumpelFunk", mid=mid)
+            ov_bubble(b.get("from"), b["text"])
     elif n == "outmsg":
         if str(b.get("text") or "").strip() and clean_name(b.get("to")):
             inbox_add("out", str(b["text"]).strip(), sender="Du an " + clean_name(b["to"]))
@@ -967,7 +1358,7 @@ def watcher():
     """Beendet D-Hub, wenn das Fenster geschlossen wurde (und keine Downloads mehr laufen)."""
     while True:
         time.sleep(1)
-        busy = any(d["state"] in ("running", "queued") for d in downloads)
+        busy = OV["on"] or any(d["state"] in ("running", "queued") for d in downloads)
         if BYE[0] and LAST[0] <= BYE[0] and time.time() - BYE[0] > 4 and not busy:
             os._exit(0)
 
@@ -983,7 +1374,7 @@ def state():
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
     return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]] + ([LIB["gal_info"]] if LIB.get("gal_info") else []), perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
-                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
+                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), gamecfg=store.get("gamecfg") or {}, ov=dict(on=OV["on"], err=OV["err"], fps=OV["fps"], msg=OV["fpsmsg"]), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 
 
 PAGE = r'''<!DOCTYPE html>
@@ -1020,6 +1411,8 @@ h2{margin:0 0 4px;font-size:22px}.sub{color:var(--dim);margin-bottom:20px}
 .art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .play{position:absolute;left:0;right:0;bottom:0;padding:34px 12px 12px;background:linear-gradient(transparent,rgba(8,10,18,.92));font-weight:600;z-index:2;
  opacity:0;transform:translateY(10px);transition:opacity .2s,transform .2s}
+.cog{position:absolute;top:8px;right:8px;z-index:5;width:30px;height:30px;border-radius:50%;border:1px solid var(--ac);background:rgba(5,8,5,.85);color:var(--ac);font-size:16px;cursor:pointer;opacity:0;transition:opacity .2s,transform .2s}.card:hover .cog,.cog:focus-visible{opacity:1}.cog:hover{transform:rotate(60deg)}
+#gm input[type=range],#gm input[type=checkbox]{accent-color:var(--ac)}#gm{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:40;align-items:center;justify-content:center;padding:20px}#gm.on{display:flex}#gm .box{background:var(--bg2,#0c110c);border:1px solid var(--ac);border-radius:14px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:20px}
 .card:hover .play,.card:focus-visible .play{opacity:1;transform:none}
 .art span{transition:opacity .2s}.card:hover .art span,.card:focus-visible .art span{opacity:0}
 .card.off .art img,.card.off .art{filter:saturate(.45) brightness(.8)}
@@ -1107,6 +1500,7 @@ footer{padding:9px 24px;border-top:1px solid var(--line);color:var(--dim);font-s
 <div class="pop" id="frpop"><h3>Freunde</h3><div class="body" id="frbody"></div></div>
 <div id="lost"><div><b style="font-size:18px">D-Hub wurde beendet oder startet neu.</b><p class="dim">Nach einem Update öffnet sich automatisch ein neues Fenster.<br>Du kannst dieses Fenster schließen.</p></div></div>
 <div id="ubanner"></div>
+<div id="gm" onclick="if(event.target==this)closeCfg()"><div class="box" id="gmb"></div></div>
 <main></main>
 <div id="kfwrap" class="hide"><div class="bar"><span style="flex:1">KumpelFunk von Lerun3. Das Gespräch läuft weiter, wenn du den Reiter wechselst.</span>
  <button class="btn" onclick="api('connect',{store:'KumpelFunk'})">In eigenem Fenster öffnen</button></div>
@@ -1132,6 +1526,25 @@ const installed=g=>g.versions.some(v=>v.installed);
 function visible(){return S.games.filter(g=>(tab=='Alle'||g.versions.some(v=>v.store==tab))&&g.title.toLowerCase().includes(q)&&(flt=='all'||(flt=='inst')==installed(g)))
  .sort((a,b)=>a.title.localeCompare(b.title))}
 
+function closeCfg(){$('#gm').classList.remove('on')}
+function openCfg(id){
+ const g=S.games.find(x=>x.id==id);if(!g)return;
+ const c=Object.assign({cross:false,cstyle:'cross',ccolor:'#5cff0c',csize:12,cgap:4,cthick:2,fps:false,kf:false},(S.gamecfg||{})[id]||{});
+ window._cfgId=id;window._cfg=c;
+ const ck=(k,l,d)=>`<label class="row" style="cursor:pointer"><span style="flex:1">${l}${d?`<div class="dim">${d}</div>`:''}</span><input type="checkbox" ${c[k]?'checked':''} onchange="cfgSet('${k}',this.checked)"></label>`;
+ const num=(k,l,lo,hi)=>`<div class="row"><span style="width:110px">${l}</span><input type="range" min="${lo}" max="${hi}" value="${c[k]}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value" onchange="cfgSet('${k}',+this.value)"><span style="width:28px;text-align:right">${c[k]}</span></div>`;
+ $('#gmb').innerHTML=`<h2 style="margin:0 0 4px">${esc(g.title)}</h2><div class="sub">Overlay und Einstellungen</div>
+ <div class="panel"><b>Fadenkreuz</b>${ck('cross','Fadenkreuz anzeigen')}
+  <div class="row"><span style="width:110px">Form</span><select onchange="cfgSet('cstyle',this.value)">${[['cross','Kreuz mit Lücke'],['plus','Plus'],['dot','Punkt'],['circle','Kreis']].map(([v,l])=>`<option value="${v}" ${v==c.cstyle?'selected':''}>${l}</option>`).join('')}</select>
+  <input type="color" value="${c.ccolor}" onchange="cfgSet('ccolor',this.value)" title="Farbe" style="margin-left:8px;width:44px;height:30px"></div>
+  ${num('csize','Größe',2,60)}${num('cgap','Lücke',0,30)}${num('cthick','Dicke',1,8)}</div>
+ <div class="panel"><b>Anzeigen</b>${ck('fps','FPS-Anzeige (oben rechts)','Lädt beim ersten Mal das kostenlose Intel-Tool PresentMon herunter. Braucht meist Administrator-Rechte.')}
+  ${ck('kf','KumpelFunk-Overlay (oben links)','Zeigt, wer spricht, und neue Chat-Nachrichten. Läuft nur, wenn KumpelFunk die Daten an D-Hub schickt.')}</div>
+ <p class="dim">Das Overlay erscheint, wenn du das Spiel über D-Hub startest. Es klappt in Fenster- und Randlos-Modus, nicht im exklusiven Vollbild. <b>Strg+Umschalt+F9</b> blendet es ein/aus, <b>Strg+Umschalt+F10</b> beendet es.${S.ov&&S.ov.err?`<br><span style="color:var(--warn)">Fehler: ${esc(S.ov.err)}</span>`:''}</p>
+ <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" onclick="api('action',{name:'ovstart',id:'${id}'}).then(()=>{toast('Overlay läuft')});closeCfg()">Overlay jetzt starten</button>
+ <button class="btn" onclick="api('action',{name:'ovstop'});toast('Overlay beendet')">Overlay beenden</button><button class="btn" onclick="closeCfg()">Schließen</button></div>`;
+ $('#gm').classList.add('on')}
+function cfgSet(k,v){window._cfg[k]=v;api('action',{name:'gamecfg',id:window._cfgId,cfg:window._cfg})}
 function play(id){
  const g=S.games.find(x=>x.id==id), order=['GOG','Steam','Epic'];
  const inst=g.versions.filter(v=>v.installed).sort((a,b)=>order.indexOf(a.store)-order.indexOf(b.store))[0];
@@ -1160,13 +1573,13 @@ function libView(){
   :'<div class="empty">Keine Treffer.</div>');
  if(S.settings.view=='list') return h+`<table><tr><th>Titel</th><th>Stores</th><th>Größe</th><th>Status</th><th></th></tr>`+
   gs.map(g=>`<tr><td>${esc(g.title)}</td><td>${badges(g)}</td><td>${gb(Math.max(...g.versions.map(v=>v.size)))}</td>
-  <td>${installed(g)?'Installiert':'Nicht installiert'}</td><td><button class="btn pri" onclick="play('${g.id}')">${installed(g)?'Spielen':'Installieren'}</button></td></tr>`).join('')+'</table>';
+  <td>${installed(g)?'Installiert':'Nicht installiert'}</td><td><button class="btn pri" onclick="play('${g.id}')">${installed(g)?'Spielen':'Installieren'}</button> <button class="btn" title="Overlay und Spieleinstellungen" onclick="openCfg('${g.id}')">⚙</button></td></tr>`).join('')+'</table>';
  return h+'<div class="grid">'+gs.map(g=>{
   const st=g.versions.find(v=>v.store=='Steam');
   const img=st&&!S.demo?`<img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${st.sid}/library_600x900.jpg" loading="lazy" alt="" onerror="this.remove()">`:'';
   return `<div class="card ${installed(g)?'':'off'}" tabindex="0" onclick="play('${g.id}')" onkeydown="if(event.key=='Enter')play('${g.id}')">
   <div class="art" style="--h:${hue(g.title)}"><div class="badges">${badges(g)}</div><span>${esc(g.title)}</span>${img}
-  <div class="play">${installed(g)?'Spielen':'Installieren'}</div></div>
+  <div class="play">${installed(g)?'Spielen':'Installieren'}</div><button class="cog" title="Overlay und Spieleinstellungen" onclick="event.stopPropagation();openCfg('${g.id}')">⚙</button></div>
   <div class="name">${esc(g.title)}</div><div class="meta">${installed(g)?gb(Math.max(...g.versions.map(v=>v.size))):'Nicht installiert'}</div></div>`}).join('')+'</div>'}
 
 function dlView(){
@@ -1296,6 +1709,8 @@ const KF_SNIPPET=[
 "  },DHUB_ORIGIN);",
 " }",
 " // Neue Nachricht an D-Hub weitergeben:",
+" // Wer ist im Sprachkanal, wer spricht gerade? Bei jeder Änderung aufrufen: dhubVoice([{name:'Lerun3',speaking:true},{name:'Du',speaking:false}])",
+" window.dhubVoice=function(members){ if(host)host.postMessage({source:'kumpelfunk',type:'voice',members:members},DHUB_ORIGIN); };",
 " window.dhubNachricht=function(von,text,id){ if(host)host.postMessage({source:'kumpelfunk',type:'message',from:von,text:text,id:id},DHUB_ORIGIN); };",
 "})();"
 ].join('\n');
@@ -1310,6 +1725,7 @@ addEventListener('message',e=>{
  if(e.origin!==KF_ORIGIN||e.source!==$('#kf').contentWindow)return;
  const d=e.data;if(!d||d.source!=='kumpelfunk')return;
  if(d.type==='profile')api('action',{name:'kfprofile',profile:{name:d.name,friends:d.friends}}).then(()=>updChrome());
+ else if(d.type==='voice'&&Array.isArray(d.members))api('action',{name:'kfvoice',members:d.members.slice(0,8).map(m=>({name:String(m.name||''),speaking:!!m.speaking}))});
  else if(d.type==='message'&&d.text)api('action',{name:'kfmsg',from:String(d.from||''),text:String(d.text),id:d.id}).then(()=>updChrome());
 });
 function askUpdate(){

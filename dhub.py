@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.3 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.4 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.3"
+VERSION = "1.4"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -309,6 +309,25 @@ def open_window(url):
         subprocess.Popen([edge, "--app=" + url])
     else:
         webbrowser.open(url)
+
+
+def run_window(url):
+    """Eigenes Programmfenster (WebView2, ohne Edge-Optik). Blockiert bis das Fenster zu ist.
+    Gibt False zurueck, wenn das nicht moeglich ist, dann greift der Edge-App-Modus."""
+    if not IS_WIN:
+        return False
+    try:
+        import webview
+        webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805")
+        data = os.path.join(HERE, "webview-data")
+        try:
+            webview.start(gui="edgechromium", private_mode=False, storage_path=data)
+        except TypeError:
+            webview.start(gui="edgechromium")
+        return True
+    except Exception as e:
+        LIB["diag"] = ["Eigenes Fenster nicht moeglich (%s: %s), Edge-Fenster wird benutzt." % (type(e).__name__, e)]
+        return False
 
 
 def dl_legendary():
@@ -1442,7 +1461,8 @@ if __name__ == "__main__":
         ex = None
     if ex:
         if ex.get("version") == VERSION:
-            open_window(url)
+            if not run_window(url):
+                open_window(url)
             sys.exit(0)
         try:
             urllib.request.urlopen(urllib.request.Request(url + "/api/quit", data=b"{}"), timeout=3)
@@ -1468,5 +1488,11 @@ if __name__ == "__main__":
     for fn in (worker, price_worker, watcher, update_loop, apply_loop):
         threading.Thread(target=fn, daemon=True).start()
     kick()
-    open_window(url)
-    srv.serve_forever()
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    if run_window(url):  # Fenster wurde geschlossen: beenden, sobald keine Downloads mehr laufen
+        BYE[0] = time.time() + 1
+        LAST[0] = 0
+    else:
+        open_window(url)
+    while True:
+        time.sleep(3600)

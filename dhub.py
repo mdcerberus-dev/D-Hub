@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.2 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.3 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.2"
+VERSION = "1.3"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -30,7 +30,7 @@ def save():
 
 
 def norm(t):
-    return re.sub(r"[^a-z0-9]", "", t.lower())
+    return re.sub(r"[^a-z0-9]", "", str(t or "").lower())
 
 
 # ---------- Scanner ----------
@@ -168,7 +168,7 @@ GALAXY_DB = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "GOG.
 
 
 def owned_entry(st, sid, title):
-    return dict(store=st, sid=str(sid), title=title, size=0, installed=False, launch="")
+    return dict(store=st, sid=str(sid), title=str(title or "").strip(), size=0, installed=False, launch="")
 
 
 def steam_id():
@@ -278,7 +278,7 @@ def refresh_owned():
             LIB["errs"]["GOG"] = "GOG: Für deine ganze Bibliothek wird GOG Galaxy (angemeldet) gebraucht."
         for name, fn in jobs:
             try:
-                owned[name] = fn()
+                owned[name] = [g for g in fn() if str(g.get("title") or "").strip()]
                 LIB["errs"].pop(name, None)
             except Exception as e:
                 msg = str(e)
@@ -519,12 +519,13 @@ def diagnose(real):
 
 
 def scan():
-    inst = steam_games() + epic_games() + gog_games() + ubisoft_games()
+    ok_title = lambda g: bool(str((g or {}).get("title") or "").strip()) and norm(g["title"]) != ""
+    inst = [g for g in steam_games() + epic_games() + gog_games() + ubisoft_games() if ok_title(g)]
     real = list(inst)
     have = {(g["store"], g["sid"]) for g in real}
     for lst in store.get("owned", {}).values():
         for g in lst:
-            if (g["store"], g["sid"]) not in have:
+            if ok_title(g) and (g["store"], g["sid"]) not in have:
                 have.add((g["store"], g["sid"]))
                 real.append(g)
     demo = bool(store["settings"].get("demo"))
@@ -755,6 +756,16 @@ def update_loop():
         time.sleep(3600)
 
 
+def uninstaller():
+    """Pfad zum Deinstallationsprogramm, nur vorhanden wenn D-Hub per Setup installiert wurde."""
+    if not (IS_WIN and getattr(sys, "frozen", False)):
+        return ""
+    for f in sorted(os.listdir(HERE)):
+        if re.fullmatch(r"unins\d+\.exe", f, re.I):
+            return os.path.join(HERE, f)
+    return ""
+
+
 def restart():
     if IS_WIN:
         if getattr(sys, "frozen", False):
@@ -877,6 +888,15 @@ def do_action(b):
         autostart_set(bool(b.get("on")))
     elif n == "edgemic" and edge_path():
         subprocess.Popen([edge_path(), "edge://settings/content/microphone"])
+    elif n == "uninstall" and IS_WIN:
+        un = uninstaller()
+        if un:
+            try:
+                autostart_set(False)
+            except Exception:
+                pass
+            subprocess.Popen([un], cwd=HERE, close_fds=True)
+            threading.Thread(target=lambda: (time.sleep(1.5), os._exit(0)), daemon=True).start()
     elif n == "opendata" and IS_WIN:
         os.startfile(HERE)
     elif n == "clearprices":
@@ -928,7 +948,7 @@ def state():
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
     return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=LIB["diag"], perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
-                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
+                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 
 
 PAGE = r'''<!DOCTYPE html>
@@ -1138,7 +1158,11 @@ function valView(){
  <td>${g.price==null?'<span class="dim">–</span>':eur(g.price)}<div class="meta">${esc(g.psrc||'')}</div></td>
  <td><input type="number" min="0" step="0.01" style="width:100px" value="${g.manual??''}" placeholder="${g.price??''}" onchange="api('price',{id:'${g.id}',price:this.value===''?null:+this.value}).then(render)"></td></tr>`).join('')+'</table></div>'}
 
-function setView(){
+function setView(){return setView0()+uninstPanel()}
+function uninstPanel(){
+ const T2=S.uninst;
+ return `<div class="panel" style="border-color:rgba(255,80,80,.35)"><b>Deinstallieren</b><p class="dim">${T2?'Entfernt D-Hub von diesem PC, inklusive Desktop-Verknüpfung und Autostart. Deine Spiele und Launcher bleiben unberührt.':'Diese Version wurde nicht über das Setup installiert. Zum Entfernen einfach die Datei D-Hub.exe samt Ordner löschen.'}</p><button class="btn" ${T2?'':'disabled'} onclick="if(confirm('D-Hub wirklich deinstallieren?')){api('action',{name:'uninstall'});toast('Deinstallation startet …')}">D-Hub deinstallieren</button></div>`}
+function setView0(){
  const c=s=>S.games.filter(g=>g.versions.some(v=>v.store==s)).length, L=S.launchers, has=x=>L.includes(x), P=S.perms||{}, E=S.errs, T=S.settings;
  const chip=k=>({ok:'<i class="b ok">Bereit</i>',todo:'<i class="b warn">Aktion nötig</i>',na:'<i class="b mute">Nicht erkannt</i>'}[k]||'');
  const row=(l,ctl)=>`<div class="row"><span style="flex:1">${l}</span>${ctl}</div>`;
@@ -1437,7 +1461,10 @@ if __name__ == "__main__":
             import ctypes
             ctypes.windll.user32.MessageBoxW(0, "D-Hub konnte nicht starten, weil der Port belegt ist. Bitte D-Hub im Task-Manager beenden.", "D-Hub", 0x10)
         sys.exit(1)
-    scan()
+    try:
+        scan()
+    except Exception as e:
+        LIB["diag"] = ["Fehler beim Einlesen der Bibliothek: %s: %s" % (type(e).__name__, e)]
     for fn in (worker, price_worker, watcher, update_loop, apply_loop):
         threading.Thread(target=fn, daemon=True).start()
     kick()

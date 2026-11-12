@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.5 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.6 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.5"
+VERSION = "1.6"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -234,10 +234,20 @@ def galaxy_owned():
     shutil.copy2(GALAXY_DB, tmp)
     con = sqlite3.connect(tmp)
     try:
-        try:
-            owned = {r[0] for r in con.execute("SELECT releaseKey FROM OwnedGames")}
-        except sqlite3.Error:
-            owned = None
+        # Nur Spiele, die wirklich dir gehoeren. Galaxy kennt in GamePieces auch Store-Katalog, Wunschliste usw.
+        owned, src = set(), []
+        for q, nm in (("SELECT releaseKey FROM OwnedGames", "OwnedGames"),
+                      ("SELECT gameReleaseKey FROM ProductPurchaseDates", "Kaeufe"),
+                      ("SELECT releaseKey FROM UserReleaseProperties WHERE isOwned = 1", "Eigene")):
+            try:
+                got = {r[0] for r in con.execute(q) if r[0]}
+            except sqlite3.Error:
+                continue
+            if got:
+                owned |= got
+                src.append("%s %d" % (nm, len(got)))
+        if not owned:
+            raise RuntimeError("GOG: In Galaxy ist nichts als Besitz gespeichert. Melde dich in Galaxy an, warte bis die Bibliothek geladen ist, und lies dann neu ein.")
         titles = {}
         for key, typ, val in con.execute(
                 "SELECT gp.releaseKey, t.type, gp.value FROM GamePieces gp JOIN GamePieceTypes t ON t.id = gp.gamePieceTypeId "
@@ -254,8 +264,9 @@ def galaxy_owned():
     out = []
     for key, t in titles.items():
         pre, _, sid = key.partition("_")
-        if pre in names and (owned is None or key in owned):
+        if pre in names and key in owned and str(t or "").strip():
             out.append(owned_entry(names[pre], sid, t))
+    LIB["gal_info"] = "Galaxy: %d Eintraege in der Datenbank, %d davon im Besitz (%s)" % (len(titles), len(out), ", ".join(src))
     if not out:
         raise RuntimeError("GOG: Galaxy hat keine Spiele gespeichert. Melde dich in Galaxy an und warte kurz.")
     return out
@@ -970,7 +981,7 @@ def state():
         g["manual"] = manual
         g["price"] = manual if manual is not None else (lp or {}).get("v")
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
-    return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]], perr=LIB["perr"],
+    return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]] + ([LIB["gal_info"]] if LIB.get("gal_info") else []), perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
                 errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 

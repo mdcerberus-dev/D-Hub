@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.0"
+VERSION = "3.1"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -2465,7 +2465,7 @@ PAGE = r'''<!DOCTYPE html>
 .reel.land .rsym{animation:rland .4s cubic-bezier(.3,1.6,.5,1)}@keyframes rland{0%{transform:translateY(-34px)}100%{transform:none}}
 .slotpay{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:13px}.slotpay span{display:flex;gap:4px;align-items:center;background:rgba(0,0,0,.35);border:1px solid rgba(227,189,85,.45);border-radius:999px;padding:2px 9px}.slotpay b{color:#ffd878}
 .slotbtn{padding:11px 44px;font-size:17px;font-weight:800;border-radius:999px;background:linear-gradient(#ffe27a,#d99a1c)!important;color:#2a1604!important;box-shadow:0 5px 0 #7a5410,0 10px 18px rgba(0,0,0,.4)}.slotbtn:active{transform:translateY(3px);box-shadow:0 2px 0 #7a5410}
-.dnum{font-size:64px;font-weight:800;margin:6px 0;min-height:78px}
+.dnum{font-size:44px;font-weight:800;margin:2px 0;min-height:54px}
 .gres{min-height:34px;text-align:center;font-size:20px;font-weight:700;margin-top:10px}.gres.win{color:var(--ac)}.gres.lose{color:var(--warn)}.gres.even{color:var(--dim)}
 body.hv-tilt .card:hover{transform:perspective(700px) rotateX(5deg) rotateY(-8deg) translateY(-6px) scale(1.05)}
 body.hv-pop .card:hover{animation:hvpop .45s forwards}@keyframes hvpop{0%{transform:none}40%{transform:translateY(-16px) scale(1.07)}70%{transform:translateY(-3px) scale(1.04)}100%{transform:translateY(-7px) scale(1.05)}}
@@ -2582,7 +2582,8 @@ footer{padding:9px 24px;border-top:1px solid var(--line);color:var(--dim);font-s
 .arbox{padding:16px;max-width:100%;text-align:center}.arcards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .arcard{width:150px;padding:12px;border:1px solid #333b4a;border-radius:10px;background:#171b25;cursor:pointer;color:#e8ecf2}.arcard:hover{border-color:var(--ac)}
 .arcard.dis{opacity:.45;pointer-events:none}.gshell>h2,.gshell>.sub{display:none}.gbar{margin:0 0 10px}
-.gshell .arwrap{width:min(1100px,100%,calc((100vh - 250px)*1.6));margin:0 auto}
+.gshell .arwrap{max-width:none;width:min(100%,calc((100vh - 135px)*1.6));margin:0 auto}
+body.ingame nav,body.ingame footer{display:none}body.ingame main{padding:10px 16px}body.ingame header{padding:7px 18px}
 .gshell .dim{text-align:center}
 .gopen{animation:gopen .8s cubic-bezier(.2,.8,.2,1) both}
 @keyframes gopen{0%{opacity:0;transform:scale(.9) translateY(16px);clip-path:circle(6% at 50% 45%);filter:blur(6px) brightness(2.2)}60%{opacity:1;filter:blur(0) brightness(1.2)}100%{opacity:1;transform:none;clip-path:circle(150% at 50% 45%);filter:none}}
@@ -2631,7 +2632,7 @@ footer{padding:9px 24px;border-top:1px solid var(--line);color:var(--dim);font-s
 @media(max-width:980px){.atmain{grid-template-columns:1fr}}.arpr{margin-top:6px;font-weight:800;color:#ffd23f}
 
 #skcv{position:fixed;inset:0;z-index:0;pointer-events:none}
-body.skon>header,body.skon>main,body.skon>#kfwrap,body.skon>footer{position:relative;z-index:1}
+body.skon>header,body.skon>main,body.skon>#kfwrap:not(.hide),body.skon>footer{position:relative;z-index:1}
 .chsel{display:flex;gap:10px;align-items:center;margin:10px 0 2px;flex-wrap:wrap}.chb{display:flex;align-items:center;gap:8px;padding:5px 14px 5px 8px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--tx);cursor:pointer;font:inherit}
 .chb img{height:42px}.chb.on{border-color:var(--ac);box-shadow:0 0 12px rgba(var(--acrgb),.35)}.chb.lock img{filter:grayscale(1) brightness(.55)}.chb i{font-style:normal;color:#ffd23f;font-size:12px}.chimg{height:52px;flex:none}
 .gozzy{position:absolute;left:50%;bottom:-8px;height:178px;transform:translateX(-46%);filter:drop-shadow(0 6px 10px rgba(0,0,0,.55))}.gatl .gmini{opacity:.5}
@@ -2661,6 +2662,34 @@ body.sk-galaxy .panel,body.sk-galaxy .card,body.sk-galaxy header,body.sk-galaxy 
 body.sk-gold{--panel:rgba(18,14,5,.78);--bg:#0b0905;--line:rgba(255,210,63,.35)}
 body.sk-gold .brand b,body.sk-gold h2{background:linear-gradient(100deg,#8a6a14 20%,#fff0a8 40%,#ffd23f 50%,#8a6a14 80%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:goldshine 4s linear infinite}@keyframes goldshine{to{background-position:-250% 0}}
 body.sk-gold .panel,body.sk-gold .card{border-color:rgba(255,210,63,.35)}
+
+.gcent{max-width:780px;margin:0 auto;text-align:center}.gcent .row{justify-content:center}.gcent h2,.gcent .sub{text-align:center}
+.coinwrap{position:relative;height:290px;display:flex;align-items:center;justify-content:center;perspective:1000px;overflow:visible}
+.cshadow{position:absolute;left:50%;top:calc(50% + 86px);width:120px;height:26px;margin-left:-60px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.65),transparent 70%);opacity:.6}
+.ctilt{transform-style:preserve-3d;transform:rotateX(-24deg);width:130px;height:130px;position:relative}
+.cjump{transform-style:preserve-3d;width:130px;height:130px;position:absolute;inset:0}
+.cn{width:130px;height:130px;position:absolute;inset:0;transform-style:preserve-3d}
+.cn .ce{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#8a5d00,#d9a400,#7a5200,#c58a00,#8a5d00);border:3px solid #6e4a00;box-sizing:border-box}
+.cn .cf{position:absolute;inset:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;backface-visibility:hidden;transform:translateZ(7.5px);box-sizing:border-box;border:5px solid #ffe27a;
+ background:radial-gradient(circle at 32% 28%,#fff3b0 0,#f5c518 38%,#c58a00 78%,#a06c00 100%);color:#5a3b00;box-shadow:inset 0 0 0 4px rgba(120,80,0,.35),inset 0 0 22px rgba(255,255,255,.35)}
+.cn .cf::before{content:"";position:absolute;inset:11px;border-radius:50%;border:2px dashed rgba(100,65,0,.55)}.cn .cf::after{content:"";position:absolute;inset:0;border-radius:50%;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.5) 46%,transparent 58%);animation:cshine 2.8s linear infinite}
+@keyframes cshine{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+.cn .cf.cb{transform:rotateX(180deg) translateZ(7.5px)}.cn .cf b{font-size:21px;letter-spacing:2px;text-shadow:0 1px 0 rgba(255,255,255,.55)}.cic{font-size:34px;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.6),0 -1px 0 rgba(90,55,0,.5)}
+.d20w{position:relative;height:290px;display:flex;align-items:center;justify-content:center;perspective:900px;margin-bottom:4px}
+.d20aura{position:absolute;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(150,100,255,.4),rgba(255,200,90,.1) 45%,transparent 68%);animation:aura 3.2s ease-in-out infinite}
+@keyframes aura{50%{transform:scale(1.12);opacity:.75}}
+.d20ring{position:absolute;width:250px;height:250px;border-radius:50%;border:2px dashed rgba(215,185,255,.4);animation:spin 26s linear infinite}.d20ring.r2{width:290px;height:290px;border:1px solid rgba(255,214,120,.3);animation-duration:40s;animation-direction:reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.d20sp{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:#ffe9a8;box-shadow:0 0 8px 2px rgba(255,214,120,.9);opacity:0;animation:d20sp 3.4s ease-in-out infinite}
+.d20sp:nth-of-type(1){--x:-120px;--y:-80px}.d20sp:nth-of-type(2){--x:110px;--y:-110px;animation-delay:.5s}.d20sp:nth-of-type(3){--x:-140px;--y:40px;animation-delay:1s}.d20sp:nth-of-type(4){--x:130px;--y:70px;animation-delay:1.5s}.d20sp:nth-of-type(5){--x:-40px;--y:-135px;animation-delay:2s}.d20sp:nth-of-type(6){--x:60px;--y:120px;animation-delay:2.5s}.d20sp:nth-of-type(7){--x:0px;--y:-100px;animation-delay:2.9s}
+@keyframes d20sp{0%{opacity:0;transform:translate(0,0) scale(.4)}25%{opacity:1}100%{opacity:0;transform:translate(var(--x),calc(var(--y) - 40px)) scale(1)}}
+.d20w.rolling .d20aura{animation-duration:.6s}.d20w.win .d20aura{background:radial-gradient(circle,rgba(110,255,150,.5),rgba(255,214,90,.14) 45%,transparent 68%)}.d20w.lose .d20aura{background:radial-gradient(circle,rgba(255,90,90,.4),rgba(120,60,200,.1) 45%,transparent 68%)}
+.d20j,.d20t,.d20s,.d20fin{transform-style:preserve-3d;position:absolute;left:50%;top:50%;width:0;height:0}
+.d20t{transform:rotateX(-18deg) rotateY(10deg) scale(1.3)}
+.d20f3{position:absolute;left:-44px;top:-51px;width:88px;height:76px;transform-origin:50% 66.667%;backface-visibility:hidden;background:linear-gradient(160deg,#f1d27a,#a67a22 55%,#e6c15e);clip-path:polygon(50% 0,0 100%,100% 100%)}
+.d20f3::before{content:"";position:absolute;inset:0;clip-path:polygon(50% 9%,7% 95%,93% 95%);background:linear-gradient(165deg,#3a2285,#150b3d 55%,#4a2a9c)}
+.d20f3::after{content:"";position:absolute;inset:0;clip-path:polygon(50% 9%,7% 95%,93% 95%);background:rgba(255,255,255,var(--l,.05));pointer-events:none}
+.d20f3 i{position:absolute;left:50%;top:66.667%;transform:translate(-50%,-48%);z-index:2;font-style:normal;font-weight:800;font-size:25px;color:#ffe9a8;text-shadow:0 0 6px rgba(255,200,90,.9),0 0 14px rgba(255,170,60,.6);font-family:Verdana,Arial,sans-serif}
 </style></head><body>
 <div id="splash" aria-hidden="true"><div class="sp-logo"><img src="/logo.png" alt=""></div>
  <div class="sp-tag">Alle Spiele. <b>Ein Ort.</b></div>
@@ -2912,6 +2941,7 @@ function render(){
  if(kf){if(!$('#kf').getAttribute('src'))$('#kf').src=KF_URL}
  else if(tab=='Arcade'){arcRender()}else{$('main').innerHTML=isLib()?libView():tab=='Shop'?shopView():tab=='Gamble'?gambleView():tab=='Patchnotes'?patchView():tab=='Downloads'?dlView():tab=='Wert'?valView():setView();if(tab=='Gamble')gRefresh()}
  if(tab!='Arcade'){arStop();ivStop();atStop();auStop();arcMode=null}
+ if(!arcMode)document.body.classList.remove('ingame');
  trAll();
 }
 function saveSteam(){const b={},k=$('#skey').value.trim(),i=$('#sid').value.trim();if(k)b.steamkey=k;if(i)b.steamid=i;
@@ -3024,6 +3054,7 @@ function auTone(o){const c=AU.ctx,t=o.t,g=c.createGain(),os=c.createOscillator()
  if(o.lp){const f=c.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(o.lp,t);if(o.lpEnd)f.frequency.exponentialRampToValueAtTime(o.lpEnd,t+o.d);os.connect(f);n=f}
  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(o.vol||.2,t+(o.a||.006));g.gain.exponentialRampToValueAtTime(.0001,t+o.d);n.connect(g);g.connect(o.dest||AU.mus);os.start(t);os.stop(t+o.d+.05)}
 function auNoise(t,d,vol,hp,dest,lp){const c=AU.ctx,s=c.createBufferSource();s.buffer=AU.noise;const f=c.createBiquadFilter();f.type=lp?'lowpass':'highpass';f.frequency.value=hp;const g=c.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);s.connect(f);f.connect(g);g.connect(dest||AU.mus);s.start(t);s.stop(t+d+.02)}
+function auSweep(t,d,vol,type,f0,f1,q,dest,a){const c=AU.ctx,s=c.createBufferSource();s.buffer=AU.noise;s.loop=true;const f=c.createBiquadFilter();f.type=type;f.Q.value=q||1;f.frequency.setValueAtTime(f0,t);f.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+d);const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+(a||.01));g.gain.exponentialRampToValueAtTime(.0001,t+d);s.connect(f);f.connect(g);g.connect(dest||AU.sfxg);s.start(t);s.stop(t+d+.05)}
 function auKick(t,v){const c=AU.ctx,o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.17);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+.2);o.connect(g);g.connect(AU.mus);o.start(t);o.stop(t+.22)}
 function auSnare(t,v){auNoise(t,.14,v,1200);auTone({t,f:210,slide:120,d:.1,type:'triangle',vol:v*.9})}
 const NF=n=>440*Math.pow(2,(n-69)/12);
@@ -3047,16 +3078,24 @@ const AUT={
 function auPlay(name){if(AU.track==name)return;auStop();if(!auCtx())return;AU.track=name;AU.step=0;AU.next=AU.ctx.currentTime+.12;
  AU.timer=setInterval(()=>{const T=AUT[name];if(!T||!AU.ctx)return;while(AU.next<AU.ctx.currentTime+.3){const sd=60/T.bpm/4;T.step(AU.step,AU.next,sd);AU.next+=sd;AU.step++}},45)}
 function auStop(){if(AU.timer){clearInterval(AU.timer);AU.timer=null}AU.track=null}
-const SFXTH={shoot:40,smg:55,hit:35,kill:45,coin:50,ding:0};
+const SFXTH={shoot:40,pistol:45,smg:50,shotgun:80,rocket:120,rboom:60,hit:35,kill:45,coin:50,ding:0,dclack:40};
 function sfx(n,x){if(AU.mute||!AU.ctx||AU.ctx.state!='running')return;const now=performance.now();if(AU.last[n]&&now-AU.last[n]<(SFXTH[n]||0))return;AU.last[n]=now;
  const c=AU.ctx,t=c.currentTime,d=AU.sfxg;
  switch(n){
  case 'shoot':auTone({t,f:900,slide:260,d:.09,type:'square',vol:.07,dest:d});break;
- case 'smg':auTone({t,f:760,slide:300,d:.05,type:'square',vol:.045,dest:d});break;
- case 'shotgun':auNoise(t,.16,.2,900,d,true);auTone({t,f:140,slide:50,d:.14,type:'sawtooth',vol:.14,dest:d});break;
+ case 'pistol':{const r=1+Math.random()*.12;auNoise(t,.045,.34,1600,d);auSweep(t,.13,.22,'lowpass',2600,320,.8,d,.002);auTone({t,f:180*r,slide:48,d:.11,type:'sine',vol:.3,dest:d});auSweep(t+.06,.16,.05,'lowpass',1800,400,.6,d,.03);break}
+ case 'smg':{const r=1+Math.random()*.25;auNoise(t,.03,.24,2400,d);auSweep(t,.07,.15,'lowpass',2800*r,500,.8,d,.002);auTone({t,f:210*r,slide:70,d:.06,type:'sine',vol:.2,dest:d});break}
+ case 'shotgun':{auNoise(t,.07,.4,1300,d);auSweep(t,.34,.5,'lowpass',2200,180,.7,d,.002);auTone({t,f:120,slide:30,d:.3,type:'sine',vol:.45,dest:d});auSweep(t+.1,.3,.08,'lowpass',1500,300,.5,d,.05);
+  auNoise(t+.3,.03,.16,2600,d);auTone({t:t+.3,f:240,slide:150,d:.04,type:'square',vol:.05,dest:d});auNoise(t+.39,.04,.2,1700,d);auTone({t:t+.39,f:340,slide:200,d:.05,type:'square',vol:.06,dest:d});break}
  case 'sword':auNoise(t,.1,.12,2500,d);auTone({t,f:500,slide:1100,d:.09,type:'triangle',vol:.06,dest:d});break;
  case 'wand':auTone({t,f:600,slide:1400,d:.18,type:'sine',vol:.09,dest:d});auTone({t,f:1200,slide:1800,d:.12,type:'triangle',vol:.04,dest:d});break;
- case 'rocket':auNoise(t,.25,.18,500,d,true);auTone({t,f:220,slide:90,d:.22,type:'sawtooth',vol:.1,dest:d});break;
+ case 'rocket':{auTone({t,f:95,slide:38,d:.28,type:'sine',vol:.38,dest:d});auNoise(t,.1,.25,700,d,true);
+  auSweep(t,.9,.5,'bandpass',500,2800,1.3,d,.06);auSweep(t+.25,.7,.3,'bandpass',2800,900,1.1,d,.05);auSweep(t,.8,.16,'highpass',4000,2500,.6,d,.05);auTone({t,f:70,slide:55,d:.8,type:'sawtooth',vol:.07,dest:d,lp:260});break}
+ case 'rboom':{auSweep(t,1.1,.8,'lowpass',2200,90,.7,d,.003);auTone({t,f:85,slide:24,d:.9,type:'sine',vol:.7,dest:d});auNoise(t,.12,.4,1000,d);
+  for(let k=0;k<7;k++){const q=t+.06+Math.random()*.55;auNoise(q,.05+Math.random()*.06,.1+Math.random()*.1,1200+Math.random()*2500,d)}auSweep(t+.1,.7,.14,'highpass',3500,1500,.6,d,.05);break}
+ case 'dclack':{const r=1+Math.random()*.4;auNoise(t,.04,.3,1500,d);auTone({t,f:320*r,slide:140,d:.07,type:'triangle',vol:.22,dest:d});auTone({t,f:1900*r,d:.05,type:'sine',vol:.05,dest:d});break}
+ case 'dmagic':[1047,1319,1568,2093,2637].forEach((f,i)=>{auTone({t:t+i*.07,f,d:.6,type:'sine',vol:.09,dest:d});auTone({t:t+i*.07,f:f*2.003,d:.3,type:'sine',vol:.025,dest:d})});break
+ case 'coinring':auTone({t,f:2400,d:.5,type:'sine',vol:.09,dest:d});auTone({t,f:3610,d:.3,type:'sine',vol:.05,dest:d});auNoise(t,.03,.1,5000,d);break
  case 'boom':auNoise(t,.35,.28,400,d,true);auTone({t,f:90,slide:35,d:.3,type:'sine',vol:.25,dest:d});break;
  case 'hit':auNoise(t,.05,.09,2000,d);break;
  case 'kill':auTone({t,f:340,slide:90,d:.13,type:'sawtooth',vol:.1,dest:d,lp:1400});break;
@@ -3100,7 +3139,7 @@ const AIT=[
  {id:'arm',s:'arm',v:2,n:'Poster-Schild',d:'+2 Rüstung',price:10,ic:'<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',col:'#7aa8ff'},
  {id:'reg',s:'reg',v:1,n:'Pizza',d:'+0,5 Leben pro Sekunde',price:12,ic:'<path d="M3 6c6-3 12-3 18 0l-9 15z"/><circle cx="10" cy="9" r="1"/><circle cx="14" cy="11" r="1"/><circle cx="12" cy="15" r="1"/>',col:'#ff9a4a'},
  {id:'pick',s:'pick',v:30,n:'Magnet-Maus',d:'+30 Sammelreichweite',price:8,ic:'<path d="M5 3v8a7 7 0 0 0 14 0V3h-4v8a3 3 0 0 1-6 0V3z"/><path d="M5 7h4M15 7h4"/>',col:'#e8ecf2'}];
-const ATM=[1,1.9,3.2,5],ATC=['#c9d1d9','#5ab0ff','#b06aff','#ff5a4a'],ATN=['I','II','III','IV'],AWAVES=20,ASC=.55;
+const CVK=1.5,ATM=[1,1.9,3.2,5],ATC=['#c9d1d9','#5ab0ff','#b06aff','#ff5a4a'],ATN=['I','II','III','IV'],AWAVES=20,ASC=.55;
 const ATYPES={basic:{w:34,h:46,hp:1,sp:70,dmg:1,drop:1,col:'#cfd6dd',tint:'rgba(0,0,0,0)'},
  runner:{w:26,h:34,hp:.5,sp:140,dmg:1,drop:1,col:'#7CFC9a',tint:'rgba(0,255,120,.20)'},
  tank:{w:54,h:72,hp:3.5,sp:44,dmg:2,drop:3,col:'#b06aff',tint:'rgba(90,0,150,.30)'},
@@ -3133,14 +3172,14 @@ function arWeapon(c,w,P){c.save();c.translate(P.x,P.y);c.rotate(w.ang);if(Math.c
 /* --- Ansicht --- */
 function arView(){const c=S.coins,b=c.arc_best||{};
  return `<h2>Survivor</h2><div class="sub">Überlebe ${AWAVES} Wellen. Belohnung nur in Spiel-Coins (kein Echtgeld, kein Geldwert). Heute verdient: <b>${c.arc_today||0} / ${c.arc_cap||150}</b> 🪙 · Beste Runde: Welle ${b.wave||0}, ${b.kills||0} Kills</div>
- <div class="arwrap"><canvas id="arc" width="960" height="600"></canvas><div id="arov" class="arov"></div></div>
+ <div class="arwrap"><canvas id="arc" width="1440" height="900"></canvas><div id="arov" class="arov"></div></div>
  <div class="dim" style="margin-top:8px">WASD oder Pfeiltasten bewegen · P = Pause · Die Waffen kreisen um dich und zielen automatisch. Kaufe so viele Waffen, wie du willst (bis zu 6). Zwei gleiche der gleichen Stufe verschmelzen.</div>`}
 function arStop(){if(arRaf){cancelAnimationFrame(arRaf);arRaf=0}}
 function arLoadImgs(){arImgs=[];const gs=(S.games||[]).slice().sort(()=>Math.random()-.5).slice(0,14);
  gs.forEach(g=>{const u=coverOf(g);if(!u)return;const i=new Image();i.src=u;arImgs.push({img:i,name:g.title||'?'})})}
 function arNew(){return {w:1,t:0,dur:20,phase:'start',sp:0,kills:0,mat:0,rr:0,paused:false,orb:-Math.PI/2,
  p:{x:AWW/2,y:AWH*.62,hp:30,mhp:30,walk:0,mv:false,inv:0},s:{hp:0,dmg:0,spd:0,as:0,arm:0,reg:0,pick:0},
- weapons:[],en:[],pr:[],gems:[],pt:[],offers:[],time:0}}
+ weapons:[],en:[],pr:[],gems:[],pt:[],sm:[],cr:[],bl:[],shake:0,offers:[],time:0}}
 function arInit(){arStop();arK={};arSetChar();arCtx=$('#arc').getContext('2d');arLoadImgs();AR=arNew();arShowStart();arLast=performance.now();arRaf=requestAnimationFrame(arLoop)}
 function arShowStart(){AR=arNew();auStop();const o=$('#arov');
  o.innerHTML=`<div class="arbox"><h3 class="shh">Wähle deine Startwaffe</h3><div class="shcards">${AW.map(w=>`<div class="shc" style="--tc:${ATC[0]}" onclick="arStart('${w.id}')"><div class="shart"><img src="${arIcon(w.id,0)}" alt=""></div><b>${w.n}</b><div class="dim">${w.desc}</div></div>`).join('')}</div></div>`;o.style.display='flex'}
@@ -3155,11 +3194,17 @@ function arSpawn(type){const g=AR,T=ATYPES[type],side=Math.floor(Math.random()*4
   im:arImgs.length?arImgs[Math.floor(Math.random()*arImgs.length)]:null})}
 function arShoot(w,d,ang,P){const g=AR,dm=d.dmg*ATM[w.tier]*(1+g.s.dmg/100),bx=P.x+Math.cos(ang)*34,by=P.y+Math.sin(ang)*34;
  const mk=(a,sp,life,x)=>g.pr.push(Object.assign({x:bx,y:by,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,dmg:dm,life,r:5,col:ATC[w.tier]},x||{}));
- if(d.id=='pistol'){mk(ang,760,d.rng/760+.1);sfx('shoot')}
- else if(d.id=='smg'){mk(ang+(Math.random()-.5)*.25,820,d.rng/820+.1,{r:4});sfx('smg')}
- else if(d.id=='shotgun'){for(let i=0;i<5;i++)mk(ang+(i-2)*.13+(Math.random()-.5)*.05,680,d.rng/680+.05,{r:4});sfx('shotgun')}
+ if(d.id=='pistol'){mk(ang,760,d.rng/760+.1);sfx('pistol');arFlash(bx,by,9)}
+ else if(d.id=='smg'){mk(ang+(Math.random()-.5)*.25,820,d.rng/820+.1,{r:4});sfx('smg');arFlash(bx,by,7)}
+ else if(d.id=='shotgun'){for(let i=0;i<5;i++)mk(ang+(i-2)*.13+(Math.random()-.5)*.05,680,d.rng/680+.05,{r:4});sfx('shotgun');arFlash(bx,by,15)}
  else if(d.id=='wand'){mk(ang,360,2.4,{homing:1,r:7,col:'#c58bff'});sfx('wand')}
- else if(d.id=='rocket'){mk(ang,420,d.rng/420+.3,{aoe:90,r:8,col:'#ff9a3a'});sfx('rocket')}}
+ else if(d.id=='rocket'){mk(ang,400,d.rng/400+.3,{aoe:95,r:8,col:'#ff9a3a',rocket:1,ang,sm:0});sfx('rocket');arFlash(bx,by,18);for(let i=0;i<7;i++)g.sm.push({x:P.x+Math.cos(ang+Math.PI)*8,y:P.y+Math.sin(ang+Math.PI)*8,vx:Math.cos(ang+Math.PI+(Math.random()-.5)*1.2)*(60+Math.random()*90),vy:Math.sin(ang+Math.PI+(Math.random()-.5)*1.2)*(60+Math.random()*90),r:6+Math.random()*5,life:.7,max:.7})}}
+function arFlash(x,y,r){AR.sm.push({x,y,vx:0,vy:0,r,life:.07,max:.07,fl:1})}
+function arBoom(b){const g=AR;if(b.ex)return;b.ex=1;sfx('rboom');g.shake=.35;
+ for(const o of g.en)if(!o.dead&&Math.hypot(o.x-b.x,o.y-b.y)<b.aoe+o.w/3)arHit(o,b.dmg,(o.x-b.x)*3,(o.y-b.y)*3);
+ g.cr.push({x:b.x,y:b.y,r:b.aoe*.5,rot:Math.random()*6.28,t:0});if(g.cr.length>14)g.cr.shift();g.bl.push({x:b.x,y:b.y,t:0,R:b.aoe});
+ for(let i=0;i<22;i++){const a=Math.random()*6.28,v=80+Math.random()*320;g.pt.push({x:b.x,y:b.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.35+Math.random()*.4,col:['#ffb04a','#ff7a1a','#ffe27a','#4a3a2a'][i%4]})}
+ for(let i=0;i<10;i++){const a=Math.random()*6.28,v=30+Math.random()*110;g.sm.push({x:b.x,y:b.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-20,r:14+Math.random()*14,life:.9+Math.random()*.7,max:1.6,dark:1})}}
 function arHit(e,dm,kx,ky){e.hp-=dm;e.fl=.09;e.kx+=kx||0;e.ky+=ky||0;sfx('hit');
  for(let i=0;i<2;i++)AR.pt.push({x:e.x,y:e.y,vx:(Math.random()-.5)*160,vy:(Math.random()-.5)*160,life:.3,col:'#fff'});
  if(e.hp<=0&&!e.dead){e.dead=1;AR.kills++;sfx('kill');AR.gems.push({x:e.x,y:e.y,v:e.drop});for(let i=0;i<6;i++)AR.pt.push({x:e.x,y:e.y,vx:(Math.random()-.5)*260,vy:(Math.random()-.5)*260,life:.45,col:e.col})}}
@@ -3189,16 +3234,19 @@ function arUpdate(dt){const g=AR,p=g.p,s=g.s;g.time+=dt;g.orb+=dt*1.15;
  for(const b of g.pr){if(b.homing){let t=null,bd=1e9;for(const e of g.en){const q=Math.hypot(e.x-b.x,e.y-b.y);if(q<bd){bd=q;t=e}}
    if(t){const sp=Math.hypot(b.vx,b.vy),a=Math.atan2(b.vy,b.vx);let df=Math.atan2(t.y-b.y,t.x-b.x)-a;df=Math.atan2(Math.sin(df),Math.cos(df));const na=a+df*Math.min(1,dt*5);b.vx=Math.cos(na)*sp;b.vy=Math.sin(na)*sp}}
   b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
+  if(b.rocket){b.sm-=dt;if(b.sm<=0){b.sm=.018;g.sm.push({x:b.x-Math.cos(b.ang)*14,y:b.y-Math.sin(b.ang)*14,vx:(Math.random()-.5)*24,vy:(Math.random()-.5)*24,r:5+Math.random()*3,life:.55,max:.55})}}
   for(const e of g.en){if(e.dead)continue;if(Math.abs(e.x-b.x)<e.w/2+b.r&&Math.abs(e.y-b.y)<e.h/2+b.r){
-    if(b.aoe){sfx('boom');for(const o of g.en)if(Math.hypot(o.x-b.x,o.y-b.y)<b.aoe+o.w/3)arHit(o,b.dmg,(o.x-b.x)*3,(o.y-b.y)*3);for(let i=0;i<14;i++)g.pt.push({x:b.x,y:b.y,vx:(Math.random()-.5)*380,vy:(Math.random()-.5)*380,life:.4,col:'#ffb04a'})}
+    if(b.aoe){arBoom(b)}
     else arHit(e,b.dmg,b.vx*.2,b.vy*.2);b.life=0;break}}}
+ for(const b of g.pr)if(b.aoe&&!b.ex&&(b.life<=0||b.x<=AX0||b.x>=AX1||b.y<=AY0||b.y>=AY1))arBoom(b);
  g.pr=g.pr.filter(b=>b.life>0&&b.x>AX0&&b.x<AX1&&b.y>AY0&&b.y<AY1);g.en=g.en.filter(e=>!e.dead);
+ for(const q of g.sm){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=.96;q.vy*=.96;q.life-=dt}g.sm=g.sm.filter(q=>q.life>0);for(const q of g.bl)q.t+=dt;g.bl=g.bl.filter(q=>q.t<.6);for(const q of g.cr)q.t+=dt;g.cr=g.cr.filter(q=>q.t<9);g.shake=Math.max(0,g.shake-dt);
  const pr=80+s.pick;
  for(const m of g.gems){const d=Math.hypot(cx-m.x,cy-m.y);if(d<pr){m.x+=(cx-m.x)/d*340*dt;m.y+=(cy-m.y)/d*340*dt}if(d<20){g.mat+=m.v;m.got=1;sfx('coin')}}
  g.gems=g.gems.filter(m=>!m.got);
  for(const q of g.pt){q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt}g.pt=g.pt.filter(q=>q.life>0);
  if(g.t>=g.dur)arWaveEnd()}
-function arWaveEnd(){const g=AR;g.gems.forEach(m=>g.mat+=m.v);g.gems=[];g.en=[];g.pr=[];g.pt=[];
+function arWaveEnd(){const g=AR;g.gems.forEach(m=>g.mat+=m.v);g.gems=[];g.en=[];g.pr=[];g.pt=[];g.sm=[];g.bl=[];
  if(g.w>=AWAVES){arEnd(true);return}
  sfx('wave');g.phase='shop';g.rr=0;arOffers();arShowShop()}
 function arGameName(){const gs=S.games||[];if(!gs.length)return 'D-Hub';let t=(gs[Math.floor(Math.random()*gs.length)].title||'D-Hub');return t.length>20?t.slice(0,19)+'…':t}
@@ -3272,12 +3320,25 @@ function arEnemy(c,e,t){const w=e.w,h=e.h;c.save();c.translate(e.x,e.y);c.rotate
  c.restore()}
 function arDraw(t){const c=arCtx,g=AR;if(!c||!g)return;
  c.fillStyle='#0d110c';c.fillRect(0,0,960,600);
- c.save();c.scale(AZ,AZ);c.drawImage(arBG(),0,0);
+ c.setTransform(CVK,0,0,CVK,0,0);c.fillStyle='#0d110c';c.fillRect(0,0,960,600);
+ c.save();c.scale(AZ,AZ);if(g.shake>0)c.translate((Math.random()-.5)*g.shake*28,(Math.random()-.5)*g.shake*28);c.drawImage(arBG(),0,0);
+ for(const k of g.cr){const al=Math.min(1,(9-k.t)/2.5),R=k.r*Math.min(1,.5+k.t*4);c.save();c.globalAlpha=Math.max(0,al);c.translate(k.x,k.y);c.rotate(k.rot);c.scale(1,.62);
+  let gr=c.createRadialGradient(0,0,R*.2,0,0,R*1.55);gr.addColorStop(0,'rgba(15,10,5,.75)');gr.addColorStop(.55,'rgba(25,16,8,.55)');gr.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=gr;c.beginPath();c.arc(0,0,R*1.55,0,6.3);c.fill();
+  c.fillStyle='#6b4a2a';c.beginPath();c.arc(0,0,R*1.02,0,6.3);c.fill();gr=c.createRadialGradient(0,-R*.15,R*.1,0,0,R);gr.addColorStop(0,'#120a05');gr.addColorStop(1,'#3a2512');c.fillStyle=gr;c.beginPath();c.arc(0,0,R*.86,0,6.3);c.fill();
+  c.strokeStyle='rgba(255,210,150,.25)';c.lineWidth=2;c.beginPath();c.arc(0,0,R*1.0,Math.PI*1.1,Math.PI*1.9);c.stroke();
+  if(k.t<2){c.fillStyle='rgba(255,120,30,'+(.5*(1-k.t/2))+')';c.beginPath();c.arc(0,0,R*.55,0,6.3);c.fill()}c.restore()}
  for(const m of g.gems){c.save();c.translate(m.x,m.y);c.rotate(.785);c.fillStyle='#ffd23f';c.strokeStyle='#5a3d00';c.lineWidth=2;c.fillRect(-6,-6,12,12);c.strokeRect(-6,-6,12,12);c.restore()}
  for(const e of g.en)arEnemy(c,e,t);
+ for(const q of g.sm)if(!q.fl){const k=q.life/q.max;c.globalAlpha=Math.max(0,k*(q.dark?.55:.4));c.fillStyle=q.dark?'#3a3633':'#cfd3d8';c.beginPath();c.arc(q.x,q.y,q.r*(1.6-k*.6),0,6.3);c.fill()}c.globalAlpha=1;
  arPlayer(c,g,t);
  const n=g.weapons.length;g.weapons.forEach((w,i)=>arWeapon(c,w,arPos(i,n)));
- for(const b of g.pr){c.fillStyle=b.col;c.shadowColor=b.col;c.shadowBlur=10;c.beginPath();c.arc(b.x,b.y,b.r,0,6.3);c.fill();c.shadowBlur=0}
+ for(const b of g.pr){if(b.rocket){c.save();c.translate(b.x,b.y);c.rotate(b.ang);c.scale(1.45,1.45);const fl=10+Math.random()*7;let gr=c.createLinearGradient(-12,0,-12-fl-8,0);gr.addColorStop(0,'rgba(255,240,170,.95)');gr.addColorStop(.5,'rgba(255,140,30,.8)');gr.addColorStop(1,'rgba(255,60,0,0)');c.fillStyle=gr;c.beginPath();c.moveTo(-10,-4);c.lineTo(-12-fl-8,0);c.lineTo(-10,4);c.fill();
+   c.fillStyle='#8f969c';c.fillRect(-11,-5,22,10);c.fillStyle='#d8dde2';c.fillRect(-11,-5,22,3.2);c.fillStyle='#d83a2a';c.beginPath();c.moveTo(11,-5);c.lineTo(20,0);c.lineTo(11,5);c.fill();c.fillStyle='#c9a227';c.fillRect(-1,-5,3,10);
+   c.fillStyle='#3d4348';c.beginPath();c.moveTo(-11,-5);c.lineTo(-16,-10);c.lineTo(-6,-5);c.fill();c.beginPath();c.moveTo(-11,5);c.lineTo(-16,10);c.lineTo(-6,5);c.fill();c.restore()}
+  else{c.fillStyle=b.col;c.shadowColor=b.col;c.shadowBlur=10;c.beginPath();c.arc(b.x,b.y,b.r,0,6.3);c.fill();c.shadowBlur=0}}
+ for(const q of g.sm)if(q.fl){const k=q.life/q.max;const gr=c.createRadialGradient(q.x,q.y,0,q.x,q.y,q.r*1.6);gr.addColorStop(0,'rgba(255,250,200,'+k+')');gr.addColorStop(.5,'rgba(255,170,50,'+k*.7+')');gr.addColorStop(1,'rgba(255,100,0,0)');c.fillStyle=gr;c.beginPath();c.arc(q.x,q.y,q.r*1.6,0,6.3);c.fill()}
+ for(const q of g.bl){const k=q.t/.6,R=q.R*(.25+k*.95);c.save();c.globalAlpha=Math.max(0,1-k);const gr=c.createRadialGradient(q.x,q.y,0,q.x,q.y,R);gr.addColorStop(0,'rgba(255,255,230,'+(k<.15?1:.8)+')');gr.addColorStop(.35,'rgba(255,190,60,.9)');gr.addColorStop(.75,'rgba(230,70,10,.55)');gr.addColorStop(1,'rgba(120,20,0,0)');c.fillStyle=gr;c.beginPath();c.arc(q.x,q.y,R,0,6.3);c.fill();
+  c.strokeStyle='rgba(255,230,180,'+(1-k)*.8+')';c.lineWidth=5*(1-k)+1;c.beginPath();c.arc(q.x,q.y,q.R*(.3+k*1.25),0,6.3);c.stroke();c.restore()}
  for(const q of g.pt){c.globalAlpha=Math.max(0,q.life*2.2);c.fillStyle=q.col;c.fillRect(q.x-2.5,q.y-2.5,5,5)}c.globalAlpha=1;
  c.restore();
  if(g.phase=='play'||g.phase=='shop'){c.fillStyle='rgba(0,0,0,.55)';c.fillRect(0,0,960,38);
@@ -3299,7 +3360,7 @@ let IV=null,ivRaf=0,ivLast=0,ivCtx=null;
 const IVCAP={rapid:{c:'#ff9a3a',l:'R'},triple:{c:'#4dd2ff',l:'3'},shield:{c:'#7CFC9a',l:'S'},life:{c:'#ff5a8a',l:'+'}};
 function ivView(){const b=S.coins.inv_best||{};
  return `<h2>Invaders</h2><div class="sub">Deine eigenen Spiele-Cover greifen an. Belohnung nur in Spiel-Coins (kein Echtgeld). Heute Arcade-Coins: <b>${S.coins.arc_today||0} / ${S.coins.arc_cap||150}</b> · Beste Runde: Welle ${b.wave||0}, ${b.kills||0} Kills</div>
- <div class="arwrap"><canvas id="ivc" width="960" height="600"></canvas><div id="ivov" class="arov"></div></div>
+ <div class="arwrap"><canvas id="ivc" width="1440" height="900"></canvas><div id="ivov" class="arov"></div></div>
  <div class="dim" style="margin-top:8px">A/D oder ←/→ bewegen · Leertaste schießen (halten) · P = Pause. Dicke rote Gegner lassen manchmal Power-Ups fallen (R = Schnellfeuer, 3 = Dreifachschuss, S = Schild, + = Leben). Ab Welle 2 fliegt ein Ufo vorbei: Schaffst du es, hast du die nächsten 2 Wellen Vollautomatik.</div>`}
 function ivStop(){if(ivRaf){cancelAnimationFrame(ivRaf);ivRaf=0}}
 function ivNew(){return {phase:'start',w:1,px:480,lives:3,inv:0,cd:0,kills:0,bul:[],eb:[],pt:[],en:[],caps:[],fx:70,fy:70,dir:1,ft:1,walk:0,total:1,paused:false,banner:0,msg:'',msgT:0,
@@ -3360,7 +3421,7 @@ function ivUfoArt(c,u,t){c.save();c.translate(u.x,u.y);c.shadowColor='#ff4fd8';c
  c.fillStyle='#7CFC9a';c.beginPath();c.arc(0,-3,4,0,6.3);c.fill();c.fillStyle='#111';c.fillRect(-2.5,-4,1.6,2.4);c.fillRect(1,-4,1.6,2.4);
  for(let i=-3;i<=3;i++){c.fillStyle=['#ff4fd8','#ffe27a','#4dd2ff'][(i+3+Math.floor(t*6))%3];c.beginPath();c.arc(i*10,9+Math.abs(i)*-.6,2.6,0,6.3);c.fill()}
  c.fillStyle='rgba(0,0,0,.6)';c.fillRect(-30,-30,60,5);c.fillStyle='#ff4fd8';c.fillRect(-30,-30,60*Math.max(0,u.hp/u.mhp),5);c.restore()}
-function ivDraw(t){const c=ivCtx,g=IV;if(!c||!g)return;
+function ivDraw(t){const c=ivCtx,g=IV;if(!c||!g)return;c.setTransform(CVK,0,0,CVK,0,0);
  c.drawImage(ivBG(),0,0);c.fillStyle='#fff';ivStars.forEach(q=>{c.globalAlpha=.35+.55*Math.abs(Math.sin(t*1.4+q.p));c.fillRect(q.x,q.y,q.s,q.s)});c.globalAlpha=1;ivBlink.forEach((b,i)=>{if(Math.floor(t*1.2+i)%2){c.fillStyle='#ff3b3b';c.shadowColor='#ff3b3b';c.shadowBlur=8;c.fillRect(b.x-1.5,b.y-2,3,3);c.shadowBlur=0}});
  const sh=(t%11)/11;if(sh<.07){c.strokeStyle='rgba(255,255,255,'+(1-sh/.07)+')';c.lineWidth=2;c.beginPath();c.moveTo(150+sh*4000,40+sh*1500);c.lineTo(110+sh*4000,28+sh*1500);c.stroke()}
  for(const e of g.en){if(e.hp<=0)continue;const p=ivPos(g,e),w=44,h=58;c.save();c.translate(p.x,p.y+Math.sin(t*3+e.ph)*2);
@@ -3438,6 +3499,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.1',d:'13.11.2026',t:'Raketen, echte Sounds, Großbild, 3D-Münze und W20',i:[['Neu','Survivor: Der Raketenwerfer feuert jetzt echte Raketen mit Flamme und Rauchspur. Sie explodieren beim Aufprall oder am Ende der Reichweite mit Feuerball, Druckwelle, Funken und Rauchwolken. Dort bleibt ein kleiner Krater am Boden, der nach einigen Sekunden verblasst. Der Bildschirm wackelt kurz, und beim Abschuss gibt es Mündungsfeuer.'],['Neu','Survivor: Realistischere Waffensounds. Die Pistole knallt mit scharfem Schuss und dumpfem Nachhall, die MP rattert kürzer und variiert, die Schrotflinte donnert und repetiert, der Raketenwerfer zischt mit Startschlag und Düsenrauschen, die Explosion grollt mit Splittergeräuschen. Das Laser-Piu gibt es nur noch in Invaders.'],['Neu','Arcade-Spiele sind jetzt deutlich größer: Beim Spielen wird die Navigationsleiste ausgeblendet und das Spielfeld füllt das Fenster. Die Spielfläche wird zudem schärfer berechnet.'],['Neu','Gamble: Der Münzwurf nutzt eine echte 3D-Münze mit Dicke und Rand. Sie fliegt hoch, dreht sich mehrfach, landet mit Hüpfern und Schatten, dazu Klingeln beim Start und Aufprall.'],['Neu','Gamble: Das Würfeln läuft mit einem 3D-W20 mit 20 Flächen und Zahlen in Gold auf dunklem Violett, mit magischer Aura, kreisenden Runenringen und Funken. Er wird geworfen, hüpft und rollt aus. Das Ergebnis bleibt serverseitig dasselbe, der W20 zeigt den Bereich (jede Zahl = 5 Prozentpunkte).'],['Neu','Gamble ist jetzt mittig im Fenster ausgerichtet.'],['Fix','Special-Skins: Bei aktivem Skin konnte der Inhalt im Gamble-Reiter und anderen Reitern unsichtbar bleiben, weil eine versteckte Fläche Platz belegte. Behoben.']]},
  {v:'3.0',d:'13.11.2026',t:'Ozzy, Special-Skins, freundlicher Atlas',i:[['Neu','Neue Spielfigur „Ozzy“ nach deinem Bild, mit Laufanimation. Sie lässt sich im Shop freischalten (600 Coins) und ist dann in Survivor und Invaders spielbar. Die Auswahl steht oben im Arcade-Reiter.'],['Neu','Ozzys Atlas hat jetzt ein freundliches Gesicht auf dem Cover und im Spiel: gleiche Figur, aber mit großen freundlichen Augen und einem Lächeln, dazu eine Sprechblase, die dir passend zur Lage etwas sagt (Willkommen, nächstes Grundstück leistbar usw.).'],['Neu','Sechs Special-Skins im Shop, die nicht nur die Farbe ändern: Matrix-Regen (fallender Code, Terminal-Schrift), Retro-Röhre (Scanlines, Flackern, Computerschrift), Neon Dusk (Synthwave-Sonne mit bewegtem Gitterboden und Logo-Glitch), Inferno (aufsteigende Glut, Flammenschrift), Galaxie (Sternenhimmel, Spiralnebel, Sternschnuppen, Milchglas) und Royal Gold (Marmor, wandernder Goldglanz, Funkeln).'],['Info','Skins sind teuer (1.200 bis 3.500 Coins). Im hellen Design und während eines laufenden Arcade-Spiels pausiert der animierte Hintergrund, damit nichts ruckelt.']]},
  {v:'2.9',d:'13.11.2026',t:'Sound, Ozzys Atlas, Vollbild',i:[['Neu','Musik und Effekte: Invaders mit Synthwave, Survivor mit hartem Chiptune-Riff, Ozzys Atlas mit ruhigem Lofi-Beat. Alles wird live im Programm erzeugt, es gibt keine Audiodateien. Ein Lautsprecher-Knopf schaltet den Ton an und aus.'],['Neu','Ozzys Atlas, das dritte Arcade-Spiel: Kaufe Grundstücke auf einer Karte (Wiese, Acker, Wald, See, Berg, Stadt), verbessere sie bis Stufe 10 und erweitere sie in vier Stufen. Sie bringen passiv Atlas-Coins, auch bei geschlossenem D-Hub (bis 12 Stunden). Du startest mit 0,000002 Atlas-Coins, das reicht für genau ein Grundstück, das erste bringt 0,00000001 pro Sekunde.'],['Neu','Atlas-Coins lassen sich 1 : 1 in D-Hub-Coins tauschen, höchstens 50 pro Tag.'],['Neu','Survivor: Die Waffen kreisen jetzt dauerhaft rundum, auch das Schwert, damit du von allen Seiten geschützt bist. Du kannst beliebig viele Waffen kaufen (bis 6), im Shop gibt es immer mindestens zwei Waffen im Angebot.'],['Neu','Survivor: Die Kamera ist weiter herausgezoomt, die ganze Arena ist größer und die Figuren kleiner.'],['Neu','Survivor: Neues Kaufmenü mit Karten, Werte-Balken, Stufen-Leuchten und selbst gezeichneten Waffen statt Emojis (Pistole, MP, Schrotflinte, Schwert, Zauberstab, Raketenwerfer). Auch die Gegenstände haben eigene Symbole.'],['Neu','Invaders: Dicke rote Gegner lassen manchmal Power-Ups fallen (Schnellfeuer, Dreifachschuss, Schild, Extra-Leben).'],['Neu','Invaders: Ab Welle 2 fliegt ein Ufo schnell hin und her und schießt gezielt zurück. Besiegst du es, hast du für den Rest der Welle und die nächsten 2 Wellen Vollautomatik.'],['Neu','Gamble: Die Slotmaschine ist jetzt zentriert und edel gestaltet (Goldrahmen, Lichterkette, Glasreflex, Gewinnlinie). Beim Drehen klingelt es, jede Walze rastet hörbar ein, dazu Gewinn- und Jackpot-Sounds.'],['Neu','D-Hub hat jetzt einen echten Vollbildmodus (Knopf oben, Taste F11, oder in den Einstellungen als Startoption). Alt+Tab funktioniert dabei normal.']]},
  {v:'2.8',d:'13.11.2026',t:'Spielhalle überarbeitet',i:[['Neu','Beide Spiele liegen jetzt im Arcade-Reiter. Dort wählst du über zwei Karten mit animiertem Symbol Survivor oder Invaders. Das Spiel öffnet sich direkt in D-Hub mit Aufgehen-Animation, ein Zurück-Knopf bringt dich zur Auswahl.'],['Neu','Survivor: Grasarena mit Gras, Blumen, Steinen und Rahmen. Die ganze Arena ist wie bei Brotato fest im Bild, Gegner kommen vom Rand.'],['Neu','Invaders: Nachtszenario mit dunklem All, Mond, Sternen, Skyline mit beleuchteten Fenstern, Neonschildern und einer Straße mit Laternen. Die Spiele fliegen zu Beginn jeder Welle aus dem All herein.'],['Fix','Material (✦) ist jetzt gold und auf dem Gras gut zu sehen. Der Reiter „Invaders“ entfällt, weil er in Arcade steckt.']]},
@@ -3478,11 +3540,11 @@ function arcHub(){const c=S.coins,b=c.arc_best||{},v=c.inv_best||{};
    <div class="gfoot"><span class="dim">${at.owned} Grundstücke · ${(at.inc||0).toFixed(9)} /s</span><button class="btn pri">Spielen</button></div></div>
  </div>`}
 const GNAME={surv:'Survivor',inv:'Invaders',atlas:'Ozzys Atlas'};
-function arcOpen(m){arStop();ivStop();atStop();arcMode=m;
+function arcOpen(m){arStop();ivStop();atStop();arcMode=m;document.body.classList.add('ingame');
  const body=m=='surv'?arView():m=='inv'?ivView():atlasView();
  $('main').innerHTML=`<div class="gshell gopen"><div class="gbar"><button class="btn" onclick="arcBack()">← Zurück zur Arcade</button><b class="gtitle">${GNAME[m]}</b>${muteBtn()}</div>${body}</div>`;
  if(m=='surv')arInit();else if(m=='inv')ivInit();else atInit()}
-function arcBack(){arStop();ivStop();atStop();auStop();arcMode=null;AR=null;IV=null;$('main').innerHTML=arcHub()}
+function arcBack(){arStop();ivStop();atStop();auStop();arcMode=null;document.body.classList.remove('ingame');AR=null;IV=null;$('main').innerHTML=arcHub()}
 function ivBG(){if(ivBGc)return ivBGc;const cv=document.createElement('canvas');cv.width=960;cv.height=600;const c=cv.getContext('2d'),r=rng(21);
  const sk=c.createLinearGradient(0,0,0,520);sk.addColorStop(0,'#02030a');sk.addColorStop(.45,'#0c0a24');sk.addColorStop(.8,'#26173f');sk.addColorStop(1,'#4a2444');c.fillStyle=sk;c.fillRect(0,0,960,600);
  [[200,130,280,'rgba(120,60,210,.26)'],[770,210,240,'rgba(40,170,210,.16)'],[470,60,220,'rgba(210,60,150,.13)'],[620,330,260,'rgba(90,50,170,.14)']].forEach(n=>{const g=c.createRadialGradient(n[0],n[1],0,n[0],n[1],n[2]);g.addColorStop(0,n[3]);g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,960,520)});
@@ -3506,27 +3568,52 @@ function ivBG(){if(ivBGc)return ivBGc;const cv=document.createElement('canvas');
   c.fillStyle='#1b1d2a';c.fillRect(x-2,hy,4,110);c.fillRect(x-2,hy,26,4);c.fillStyle='#ffe2a0';c.shadowColor='#ffcf6a';c.shadowBlur=24;c.beginPath();c.ellipse(hx,hy+6,9,4,0,0,6.3);c.fill();c.shadowBlur=0}
  return ivBGc=cv}
 
-let gm='flip',gbet=10,gbusy=false,dmode='under',dtarget=50,wrot=0;
+let gm='flip',gbet=10,gbusy=false,dmode='under',dtarget=50,wrot=0,coinRot=0;
+function coinEdge(){let h='';for(let z=-7;z<=7;z+=1)h+=`<i class="ce" style="transform:translateZ(${z}px)"></i>`;return h}
+const D20={faces:null};
+function d20Build(){if(D20.faces)return D20.faces;const T=(1+Math.sqrt(5))/2,V=[[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],[T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]],
+ F=[[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],[3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]],
+ nm=v=>{const l=Math.hypot(v[0],v[1],v[2]);return [v[0]/l,v[1]/l,v[2]/l]},cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],K=44;
+ const fs=F.map(f=>{const a=V[f[0]],b=V[f[1]],c=V[f[2]],ce=[(a[0]+b[0]+c[0])/3,(a[1]+b[1]+c[1])/3,(a[2]+b[2]+c[2])/3],n=nm(ce),up=nm([a[0]-ce[0],a[1]-ce[1],a[2]-ce[2]]),yv=[-up[0],-up[1],-up[2]],xv=cr(yv,n),r=Math.hypot(ce[0],ce[1],ce[2])*K;
+  return {n,xv,yv,zv:n,r,light:.02+.2*Math.max(0,(-n[1]*.7+n[0]*.4+n[2]*.3)),num:0}});
+ const perm=[7,2,9,4,10,1,6,3,8,5];let p=0;fs.forEach((f,i)=>{if(f.num)return;const j=fs.findIndex((g,k)=>k!=i&&g.n[0]*f.n[0]+g.n[1]*f.n[1]+g.n[2]*f.n[2]<-.99);f.num=perm[p];fs[j].num=21-perm[p];p++});
+ fs.forEach(f=>{const{xv:x,yv:y,zv:z,n,r}=f;f.m=[x[0],x[1],x[2],0,y[0],y[1],y[2],0,z[0],z[1],z[2],0,n[0]*r,n[1]*r,n[2]*r,1];f.R=[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,0,0,0,1]});
+ return D20.faces=fs}
+let d20Cur=20;
+function d20Html(){const fs=d20Build(),cur=fs.find(f=>f.num==d20Cur)||fs[0];
+ return `<div class="d20w" id="d20w"><div class="d20ring"></div><div class="d20ring r2"></div><div class="d20aura"></div>${'<u class="d20sp"></u>'.repeat(7)}<div class="d20j" id="d20j"><div class="d20t"><div class="d20s" id="d20s"><div class="d20fin" id="d20f" style="transform:matrix3d(${cur.R.join(',')})">${fs.map(f=>`<div class="d20f3" style="transform:matrix3d(${f.m.join(',')});--l:${f.light.toFixed(3)}"><i>${f.num}${f.num==6||f.num==9?'.':''}</i></div>`).join('')}</div></div></div></div></div>`}
+async function d20Roll(n){const f=d20Build().find(x=>x.num==n),sp=$('#d20s'),fin=$('#d20f'),j=$('#d20j'),w=$('#d20w');if(!sp)return;
+ fin.style.transform='matrix3d('+f.R.join(',')+')';d20Cur=n;w.classList.remove('rolled','win','lose');w.classList.add('rolling');
+ const ax=[.4+Math.random(),.4+Math.random(),.2+Math.random()].map(x=>x.toFixed(2)),turns=1440+Math.floor(Math.random()*3)*360;
+ sp.animate([{transform:`rotate3d(${ax},0deg)`},{transform:`rotate3d(${ax},${turns}deg)`}],{duration:2000,easing:'cubic-bezier(.1,.7,.2,1)',fill:'forwards'});
+ j.animate([{transform:'translateY(0) scale(1)',easing:'cubic-bezier(.2,.7,.4,1)'},{transform:'translateY(-72px) scale(1.15)',offset:.26,easing:'cubic-bezier(.6,0,.9,.5)'},{transform:'translateY(0) scale(1)',offset:.46,easing:'ease-out'},{transform:'translateY(-34px)',offset:.6,easing:'ease-in'},{transform:'translateY(0)',offset:.72,easing:'ease-out'},{transform:'translateY(-9px)',offset:.82,easing:'ease-in'},{transform:'translateY(0)'}],{duration:2000});
+ [500,920,1200,1440,1640].forEach((ms,i)=>setTimeout(()=>sfx('dclack'),ms));
+ await sleep(2050);w.classList.remove('rolling');w.classList.add('rolled')}
+async function coinFlip(out){const cn=$('#cn'),cj=$('#cj'),sh=$('#csh');if(!cn)return;const end=Math.ceil(coinRot/360)*360+360*6+(out=='kopf'?0:180),from=coinRot;coinRot=end;
+ sfx('coinring');cn.animate([{transform:`rotateX(${from}deg)`},{transform:`rotateX(${end}deg)`}],{duration:1700,easing:'cubic-bezier(.25,.55,.35,1)'});cn.style.transform=`rotateX(${end}deg)`;
+ cj.animate([{transform:'translateY(0) scale(1)',easing:'cubic-bezier(.15,.7,.35,1)'},{transform:'translateY(-98px) scale(1.25)',offset:.4,easing:'cubic-bezier(.55,0,.85,.45)'},{transform:'translateY(0) scale(1)',offset:.72,easing:'ease-out'},{transform:'translateY(-22px) scale(1.04)',offset:.82,easing:'ease-in'},{transform:'translateY(0)',offset:.9,easing:'ease-out'},{transform:'translateY(-6px)',offset:.95,easing:'ease-in'},{transform:'translateY(0)'}],{duration:1700});
+ if(sh)sh.animate([{transform:'scale(1)',opacity:.6},{transform:'scale(.45)',opacity:.25,offset:.4},{transform:'scale(1)',opacity:.6,offset:.72},{transform:'scale(.9)',offset:.82},{transform:'scale(1)',opacity:.6}],{duration:1700});
+ setTimeout(()=>sfx('clack'),1230);setTimeout(()=>sfx('coinring'),1400);setTimeout(()=>sfx('tick'),1560);await sleep(1750)}
 const WHEEL=[0,0,0,0,0.5,0.5,1,1,1,1.5,2,4],WCOL={0:'#2b312b',0.5:'#7a5a1a',1:'#2f6b3a',1.5:'#1f8a8a',2:'#5a4ab0',4:'#d9a400'};
 const SLOTS=['🍒','🍋','🔔','⭐','💎','7️⃣'],SLOTPAY=[5,8,15,30,100,250];
 function gambleView(){
  const c=S.coins;
- return `<h2>Gamble</h2><div class="sub">Nur Spiel-Coins zum Spaß: kein Echtgeld, keine Auszahlung, Coins lassen sich nicht kaufen.</div>
+ return `<div class="gcent"><h2>Gamble</h2><div class="sub">Nur Spiel-Coins zum Spaß: kein Echtgeld, keine Auszahlung, Coins lassen sich nicht kaufen.</div>
  <div class="panel"><div class="row"><div style="flex:1">Kontostand <b id="gbal" style="font-size:20px">${c.balance}</b> 🪙 · Heute <b id="gnet"></b> · Runden <span id="grounds">${c.rounds}</span></div></div>
   <div class="row"><span style="width:70px">Einsatz</span><input type="number" id="gb" min="1" max="${c.max_bet}" value="${gbet}" style="width:90px" onchange="setBet(+this.value||1)">
    ${[10,50,100,250].map(x=>`<button class="btn" onclick="setBet(${x})">${x}</button>`).join('')}<button class="btn" onclick="setBet(Math.floor(gbet/2))">½</button><button class="btn" onclick="setBet(gbet*2)">×2</button><span class="dim">max. ${c.max_bet}</span></div>
   <div class="dim" id="gnote"></div></div>
  <div style="display:flex;gap:6px;margin:12px 0;flex-wrap:wrap">${[['flip','Münzwurf'],['wheel','Glücksrad'],['slots','Slots'],['dice','Würfel']].map(([k,l])=>`<button class="btn ${k==gm?'pri':''}" onclick="gm='${k}';render()">${l}</button>`).join('')}${muteBtn()}</div>
- <div class="panel" id="gstage" style="text-align:center">${gStage()}</div><div id="gres" class="gres"></div>`}
+ <div class="panel" id="gstage" style="text-align:center">${gStage()}</div><div id="gres" class="gres"></div></div>`}
 function gRefresh(){const c=S.coins,n=$('#gnet');if(!n)return;n.textContent=(c.net>=0?'+':'')+c.net;n.style.color=c.net>=0?'var(--ac)':'var(--warn)';$('#gbal').textContent=c.balance;$('#grounds').textContent=c.rounds;$('#coinn').textContent=c.balance;
  $('#gnote').textContent=c.limit_hit?'Für heute ist Schluss: Das Tageslimit von '+c.loss_limit+' Coins Verlust ist erreicht. Morgen geht es weiter.':c.rounds>=30?'Du spielst schon eine Weile. Vielleicht eine Pause?':'Tageslimit: Nach '+c.loss_limit+' Coins Verlust ist für heute Schluss.'}
 function setBet(v){gbet=Math.max(1,Math.min(S.coins.max_bet,Math.floor(v)));const i=$('#gb');if(i)i.value=gbet}
 function gStage(){
- if(gm=='flip')return `<div class="coinwrap"><div id="cn" class="cn"><div class="cf">KOPF</div><div class="cf cb">ZAHL</div></div></div><p class="dim">Richtig geraten: Einsatz ×1,9</p><button class="btn pri" onclick="play('kopf')">Kopf</button> <button class="btn pri" onclick="play('zahl')">Zahl</button>`;
+ if(gm=='flip')return `<div class="coinwrap"><div class="cshadow" id="csh"></div><div class="ctilt"><div id="cj" class="cjump"><div id="cn" class="cn" style="transform:rotateX(${coinRot}deg)">${coinEdge()}<div class="cf"><span class="cic">♛</span><b>KOPF</b></div><div class="cf cb"><span class="cic">◆</span><b>ZAHL</b></div></div></div></div></div><p class="dim">Richtig geraten: Einsatz ×1,9</p><button class="btn pri" onclick="play('kopf')">Kopf</button> <button class="btn pri" onclick="play('zahl')">Zahl</button>`;
  if(gm=='wheel')return `<div class="wheelwrap"><div class="ptr"></div><div id="wh" class="wh" style="background:conic-gradient(${WHEEL.map((m,i)=>`${WCOL[m]} ${i*30}deg ${i*30+30}deg`).join(',')});transform:rotate(${wrot}deg)">${WHEEL.map((m,i)=>`<span style="transform:rotate(${i*30+15}deg) translateY(-82px)">×${m}</span>`).join('')}</div></div><p class="dim">Von ×0 bis ×4</p><button class="btn pri" onclick="play()">Drehen</button>`;
  if(gm=='slots')return `<div class="slot" id="slotm"><div class="slotlights">${'<i></i>'.repeat(12)}</div><div class="slottitle">★ D-HUB SLOTS ★</div><div class="rwin"><div class="reels">${['🍒','🍋','🔔'].map((e,i)=>`<div class="reel" id="r${i}"><div class="rsym">${e}</div></div>`).join('')}</div></div><div class="slotpay">${SLOTS.map((s,i)=>`<span>${s}<b>×${SLOTPAY[i]}</b></span>`).join('')}<span>🍒🍒<b>×1,1</b></span></div><div class="slotlights bot">${'<i></i>'.repeat(12)}</div></div><button class="btn pri slotbtn" onclick="play()">Drehen</button>`;
  const ch=dmode=='under'?dtarget:100-dtarget;
- return `<div class="dnum" id="dn">–</div><div class="row" style="justify-content:center"><button class="btn ${dmode=='under'?'pri':''}" onclick="dmode='under';render()">Unter</button><button class="btn ${dmode=='over'?'pri':''}" onclick="dmode='over';render()">Über</button></div>
+ return `${d20Html()}<div class="dnum" id="dn">–</div><div class="dim" id="d20c">Der W20 bestimmt den Bereich (jede Zahl = 5 Prozentpunkte), die genaue Zahl steht darüber.</div><div class="row" style="justify-content:center"><button class="btn ${dmode=='under'?'pri':''}" onclick="dmode='under';render()">Unter</button><button class="btn ${dmode=='over'?'pri':''}" onclick="dmode='over';render()">Über</button></div>
  <input type="range" min="5" max="95" value="${dtarget}" style="width:80%;margin:12px 0" oninput="dtarget=+this.value;dInfo()"><div id="dinfo" class="dim">${dInfoText()}</div><button class="btn pri" onclick="play()">Würfeln</button>`}
 function dInfoText(){const ch=dmode=='under'?dtarget:100-dtarget;return `${dmode=='under'?'Wurf ≤ ':'Wurf > '}${dtarget} · Chance ${ch} % · Auszahlung ×${(95/ch).toFixed(2)}`}
 function dInfo(){const e=$('#dinfo');if(e)e.textContent=dInfoText()}
@@ -3537,7 +3624,7 @@ async function play(pick){
  let r;try{r=await coinOp('gamble','',body)}catch(e){gbusy=false;return}
  if(!r.ok){toast(r.msg);gbusy=false;document.querySelectorAll('#gstage button,#gstage input').forEach(b=>b.disabled=false);gRefresh();return}
  const x=r.result,d=x.detail;
- if(gm=='flip'){const cn=$('#cn');cn.style.transition='none';cn.style.transform='rotateY(0)';void cn.offsetWidth;cn.style.transition='transform 1.3s ease-out';cn.style.transform='rotateY('+(1800+(d.out=='kopf'?0:180))+'deg)';await sleep(1400)}
+ if(gm=='flip'){await coinFlip(d.out)}
  else if(gm=='wheel'){wrot=Math.ceil(wrot/360)*360+360*5+(360-(d.index*30+15));const w=$('#wh');w.style.transition='transform 4s cubic-bezier(.12,.7,.15,1)';w.style.transform='rotate('+wrot+'deg)';await sleep(4100)}
  else if(gm=='slots'){const rs=[0,1,2].map(i=>$('#r'+i)),stops=[1000,1550,2100],t0=Date.now(),fin=[false,false,false];let nd=0,dn=0;rs.forEach(r=>r.classList.add('spin'));
   while(Date.now()-t0<2200){const el=Date.now()-t0;if(el>=nd){sfx('ding',dn++%7);nd=el+115}
@@ -3545,7 +3632,7 @@ async function play(pick){
    await sleep(45)}
   for(let i=0;i<3;i++){rs[i].classList.remove('spin');rs[i].querySelector('.rsym').textContent=d.syms[i]}
   if(x.net>0){const m=$('#slotm');m&&m.classList.add('win');setTimeout(()=>m&&m.classList.remove('win'),2500)}}
- else{const dn=$('#dn'),t0=Date.now();while(Date.now()-t0<900){dn.textContent=1+Math.floor(Math.random()*100);await sleep(60)}dn.textContent=d.roll;dn.style.color=x.payout>0?'var(--ac)':'var(--warn)'}
+ else{const n20=Math.ceil(d.roll/5),dn=$('#dn');dn.textContent='…';dn.style.color='';await d20Roll(n20);dn.textContent='Wurf '+d.roll;dn.style.color=x.payout>0?'var(--ac)':'var(--warn)';const dw=$('#d20w');dw&&dw.classList.add(x.payout>0?'win':'lose');sfx('dmagic');const cc=$('#d20c');if(cc)cc.textContent='W20 zeigt '+n20+' (Bereich '+((n20-1)*5+1)+' bis '+n20*5+')'}
  const res=$('#gres');res.className='gres '+(x.net>0?'win':x.net<0?'lose':'even');
  res.textContent=x.net>0?`Gewonnen: +${x.net} Coins`+(x.payout>=x.bet*9?'  🎉 JACKPOT':''):x.net<0?`Verloren: ${x.net} Coins`:'Einsatz zurück';
  sfx(x.net>0?(x.payout>=x.bet*9?'jackpot':'win'):x.net<0?'lose':'tick');gRefresh();gbusy=false;document.querySelectorAll('#gstage button,#gstage input').forEach(b=>b.disabled=false)}

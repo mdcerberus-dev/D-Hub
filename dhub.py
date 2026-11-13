@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.9 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 2.0 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.9"
+VERSION = "2.0"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -47,8 +47,8 @@ def debug_info():
         tail = "".join(open(LOGF, encoding="utf-8", errors="replace").readlines()[-40:])
     except Exception:
         tail = "(noch kein Protokoll)"
-    return "D-Hub %s\nFenster: %s\nProgramm: %s\nOrdner: %s\nPort: %s\nSpiele: %d\nDiagnose: %s\nOverlay-Fehler: %s\n\nProtokoll (dhub.log):\n%s" % (
-        VERSION, WINMODE[0], sys.executable, HERE, PORT, len(LIB["games"]), " | ".join(LIB["diag"]), OV["err"] or "-", tail)
+    return "D-Hub %s\nFenster: %s\nProgramm: %s\nOrdner: %s\nPort: %s\nSpiele: %d\nDiagnose: %s\nOverlay-Fehler: %s\nOverlay-Ziel: %s\n\nProtokoll (dhub.log):\n%s" % (
+        VERSION, WINMODE[0], sys.executable, HERE, PORT, len(LIB["games"]), " | ".join(LIB["diag"]), OV["err"] or "-", OV["target"], tail)
 
 
 def norm(t):
@@ -96,7 +96,8 @@ def steam_games():
                 if not name or appid == "228980" or name.startswith(("Steamworks", "Proton", "Steam Linux")):
                     continue
                 out.append(dict(store="Steam", sid=appid, title=name, size=int(g("SizeOnDisk") or 0),
-                                installed=True, launch="steam://rungameid/" + appid))
+                                installed=True, launch="steam://rungameid/" + appid,
+                                dir=os.path.join(lib, "steamapps", "common", g("installdir"))))
             except Exception:
                 pass
     return out
@@ -120,7 +121,7 @@ def ubisoft_games():
         try:
             d = winreg.QueryValueEx(winreg.OpenKey(k, sub), "InstallDir")[0]
             out.append(dict(store="Ubisoft", sid=sub, title=os.path.basename(d.rstrip("/\\")), size=0, installed=True,
-                            launch="uplay://launch/%s/0" % sub))
+                            launch="uplay://launch/%s/0" % sub, dir=d))
         except OSError:
             pass
     return out
@@ -137,7 +138,7 @@ def epic_games():
             uri = "com.epicgames.launcher://apps/%s%%3A%s%%3A%s?action=launch&silent=true" % (
                 m["CatalogNamespace"], m["CatalogItemId"], m["AppName"])
             out.append(dict(store="Epic", sid=m["AppName"], title=m["DisplayName"], size=m.get("InstallSize", 0),
-                            installed=True, launch=uri))
+                            installed=True, launch=uri, dir=m.get("InstallLocation", "")))
         except Exception:
             pass
     return out
@@ -162,7 +163,7 @@ def gog_games():
             s = winreg.OpenKey(k, sub)
             v = lambda n: winreg.QueryValueEx(s, n)[0]
             out.append(dict(store="GOG", sid=sub, title=v("gameName"), size=0, installed=True,
-                            launch="exe:" + v("exe") + "|" + v("path")))
+                            launch="exe:" + v("exe") + "|" + v("path"), dir=v("path")))
         except OSError:
             pass
     return out
@@ -666,9 +667,11 @@ def worker():
 
 # ---------- Ingame-Overlay (Fadenkreuz, FPS, KumpelFunk) ----------
 OV = dict(on=False, visible=True, cross=None, showfps=False, showkf=False, fps=0.0, fpsmsg="", members=[], bubbles=[],
-          hwnd=0, err="", hidden=False, fpsproc=None)
+          hwnd=0, err="", hidden=False, fpsproc=None, flags={}, stats={}, gpid=0, ghwnd=0, rect=None, target_vis=False,
+          target="wartet auf Spiel …", armed=0.0, hint_dirs=[], hint_title="")
 WIN = [None]
-GCFG_DEF = dict(cross=False, cstyle="cross", ccolor="#5cff0c", csize=12, cgap=4, cthick=2, fps=False, kf=False)
+GCFG_DEF = dict(cross=False, cstyle="cross", ccolor="#5cff0c", csize=12, cgap=4, cthick=2, fps=False, kf=False,
+                ping=False, cpu=False, gpu=False, ram=False, clock=False, spos="tr")
 
 
 def gamecfg(gid):
@@ -680,8 +683,9 @@ def gamecfg(gid):
 def clean_cfg(c):
     c = c if isinstance(c, dict) else {}
     out = dict(GCFG_DEF)
-    for k in ("cross", "fps", "kf"):
+    for k in ("cross", "fps", "kf", "ping", "cpu", "gpu", "ram", "clock"):
         out[k] = bool(c.get(k))
+    out["spos"] = c.get("spos") if c.get("spos") in ("tl", "tr", "bl", "br") else "tr"
     out["cstyle"] = c.get("cstyle") if c.get("cstyle") in ("cross", "plus", "dot", "circle") else "cross"
     col = str(c.get("ccolor") or "")
     out["ccolor"] = col if re.fullmatch(r"#[0-9a-fA-F]{6}", col) else GCFG_DEF["ccolor"]
@@ -693,13 +697,26 @@ def clean_cfg(c):
     return out
 
 
-def ov_apply(cfg):
+def cfg_on(cfg):
+    return any(cfg.get(k) for k in ("cross", "fps", "kf", "ping", "cpu", "gpu", "ram", "clock"))
+
+
+def ov_apply(cfg, gid=None):
+    """Overlay mit den Einstellungen eines Spiels starten. Es verknuepft sich mit dem Fenster dieses Spiels."""
     store["lastov"] = cfg
+    if gid:
+        store["lastovgid"] = gid
+    gid = gid or store.get("lastovgid")
     save()
     OV["cross"] = cfg if cfg.get("cross") else None
     OV["showfps"] = bool(cfg.get("fps"))
     OV["showkf"] = bool(cfg.get("kf"))
-    if OV["cross"] or OV["showfps"] or OV["showkf"]:
+    OV["flags"] = dict(cfg)
+    g = next((x for x in LIB["games"] if x["id"] == gid), None)
+    OV["hint_title"] = norm(g["title"]) if g else ""
+    OV["hint_dirs"] = [v.get("dir") for v in (g["versions"] if g else []) if v.get("dir")]
+    OV["armed"] = time.time() + 900  # 15 Minuten: das naechste grosse Fenster im Vordergrund ist das Spiel
+    if cfg_on(cfg):
         ov_start()
         if OV["showfps"]:
             threading.Thread(target=fps_loop, daemon=True).start()
@@ -716,7 +733,8 @@ def ov_start():
 
 def ov_stop():
     OV["showfps"] = OV["showkf"] = False
-    OV["cross"] = None
+    OV["cross"], OV["flags"] = None, {}
+    OV["gpid"], OV["ghwnd"] = 0, 0
     stop_fps()
     try:
         if OV["hwnd"]:
@@ -769,10 +787,7 @@ def ov_toggle_visible():
     if not OV["on"]:
         ov_apply(clean_cfg(store.get("lastov")))
         return
-    import ctypes
-    OV["visible"] = not OV["visible"]
-    if OV["hwnd"]:
-        ctypes.windll.user32.ShowWindow(ctypes.c_void_p(OV["hwnd"]), 4 if OV["visible"] else 0)
+    OV["visible"] = not OV["visible"]  # das Overlay-Fenster blendet sich im naechsten Takt selbst ein oder aus
 
 
 def ov_toggle_run():
@@ -816,6 +831,216 @@ def hotkey_loop():
         OV["err"] = "Tastenkuerzel: %s: %s" % (type(e).__name__, e)
 
 
+IGNORE_EXE = {"explorer.exe", "dwm.exe", "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "galaxyclient helper.exe",
+              "upc.exe", "ubisoftconnect.exe", "eadesktop.exe", "origin.exe", "battle.net.exe", "msedge.exe", "chrome.exe", "firefox.exe",
+              "discord.exe", "taskmgr.exe", "applicationframehost.exe", "searchhost.exe", "shellexperiencehost.exe", "startmenuexperiencehost.exe",
+              "textinputhost.exe", "lockapp.exe", "cmd.exe", "powershell.exe", "windowsterminal.exe", "code.exe", "d-hub.exe", "python.exe",
+              "pythonw.exe", "msedgewebview2.exe", "systemsettings.exe", "presentmon.exe", "legendary.exe", "notepad.exe", "spotify.exe"}
+
+
+def _w32():
+    import ctypes
+    from ctypes import wintypes as W
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    H = ctypes.c_void_p
+    u.GetForegroundWindow.restype = H
+    u.GetWindowThreadProcessId.argtypes = [H, ctypes.POINTER(W.DWORD)]
+    u.IsWindow.argtypes = [H]
+    u.IsIconic.argtypes = [H]
+    u.GetClientRect.argtypes = [H, ctypes.POINTER(W.RECT)]
+    u.ClientToScreen.argtypes = [H, ctypes.POINTER(W.POINT)]
+    u.GetWindowTextW.argtypes = [H, W.LPWSTR, ctypes.c_int]
+    k.OpenProcess.restype = H
+    k.OpenProcess.argtypes = [W.DWORD, W.BOOL, W.DWORD]
+    k.QueryFullProcessImageNameW.argtypes = [H, W.DWORD, W.LPWSTR, ctypes.POINTER(W.DWORD)]
+    k.CloseHandle.argtypes = [H]
+    k.GetExitCodeProcess.argtypes = [H, ctypes.POINTER(W.DWORD)]
+    return ctypes, W, u, k
+
+
+def proc_path(pid):
+    ctypes, W, u, k = _w32()
+    h = k.OpenProcess(0x1000, False, pid)
+    if not h:
+        return ""
+    try:
+        buf, n = ctypes.create_unicode_buffer(1024), W.DWORD(1024)
+        return buf.value if k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)) else ""
+    finally:
+        k.CloseHandle(h)
+
+
+def pid_alive(pid):
+    ctypes, W, u, k = _w32()
+    h = k.OpenProcess(0x1000, False, pid)
+    if not h:
+        return False
+    try:
+        code = W.DWORD(0)
+        return bool(k.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259
+    finally:
+        k.CloseHandle(h)
+
+
+def client_rect(hwnd):
+    ctypes, W, u, k = _w32()
+    r, p = W.RECT(), W.POINT(0, 0)
+    if not u.GetClientRect(hwnd, ctypes.byref(r)) or not u.ClientToScreen(hwnd, ctypes.byref(p)):
+        return None
+    return (p.x, p.y, max(1, r.right - r.left), max(1, r.bottom - r.top))
+
+
+def game_tick():
+    """Findet das Spielfenster und merkt es sich. Das Overlay legt sich genau darauf und zeigt sich nur, solange das Spiel vorne ist."""
+    ctypes, W, u, k = _w32()
+    sw, sh = u.GetSystemMetrics(0), u.GetSystemMetrics(1)
+    fg = u.GetForegroundWindow()
+    pid = W.DWORD(0)
+    if fg:
+        u.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+    fp = pid.value
+    if OV["gpid"] and not pid_alive(OV["gpid"]):
+        OV.update(gpid=0, ghwnd=0, fps=0.0, target="wartet auf Spiel …")
+    if not OV["gpid"] and fg and fp and fp != os.getpid():
+        path = proc_path(fp)
+        base = os.path.basename(path).lower()
+        if path and base not in IGNORE_EXE and not path.lower().startswith(os.environ.get("WINDIR", r"c:\windows").lower()):
+            rc = client_rect(fg)
+            big = bool(rc) and rc[2] * rc[3] >= 0.4 * sw * sh
+            buf = ctypes.create_unicode_buffer(256)
+            u.GetWindowTextW(fg, buf, 256)
+            hint = any(d and path.lower().startswith(d.lower().rstrip("\\\\/")) for d in OV["hint_dirs"]) or (
+                OV["hint_title"] and OV["hint_title"] in norm(buf.value))
+            if hint or (time.time() < OV["armed"] and big):
+                OV.update(gpid=fp, ghwnd=fg, target="%s (PID %d)" % (os.path.basename(path), fp))
+                log("Overlay verknuepft mit %s" % OV["target"])
+    vis = False
+    if OV["gpid"]:
+        if fp == OV["gpid"] and fg:
+            rc = client_rect(fg)
+            if rc and rc[2] * rc[3] >= 0.3 * sw * sh:
+                OV["ghwnd"] = fg
+        h = OV["ghwnd"]
+        if h and u.IsWindow(h) and not u.IsIconic(h):
+            rc = client_rect(h)
+            if rc:
+                OV["rect"] = rc
+                vis = fp == OV["gpid"]
+    OV["target_vis"] = vis
+
+
+def game_loop():
+    try:
+        ctypes, W, u, k = _w32()
+        try:
+            u.SetProcessDPIAware()
+        except Exception:
+            pass
+        while OV["on"]:
+            try:
+                game_tick()
+            except Exception as e:
+                OV["err"] = "Spielfenster: %s: %s" % (type(e).__name__, e)
+            time.sleep(0.4)
+    except Exception as e:
+        OV["err"] = "Spielfenster: %s: %s" % (type(e).__name__, e)
+
+
+def ping_ms(host):
+    try:
+        r = subprocess.run(["ping", "-n", "1", "-w", "1000", host], capture_output=True, text=True, errors="replace", creationflags=0x08000000, timeout=4)
+        m = re.search(r"[=<]\s*(\d+)\s*ms", r.stdout)
+        return int(m.group(1)) if m else None
+    except Exception:
+        return None
+
+
+def game_server():
+    """Haeufigste oeffentliche TCP-Gegenstelle des Spiels, sonst None."""
+    import ipaddress
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, errors="replace", creationflags=0x08000000, timeout=6).stdout
+    except Exception:
+        return None
+    for ln in out.splitlines():
+        p = ln.split()
+        if len(p) >= 5 and p[3] == "ESTABLISHED" and p[4] == str(OV["gpid"]):
+            try:
+                ip = ipaddress.ip_address(p[2].rsplit(":", 1)[0].strip("[]"))
+            except ValueError:
+                continue
+            if ip.is_global:
+                return str(ip)
+    return None
+
+
+def gpu_percent(pid):
+    try:
+        out = subprocess.run(["typeperf", r"\GPU Engine(pid_%d*)\Utilization Percentage" % pid, "-sc", "1"], capture_output=True, text=True,
+                             errors="replace", creationflags=0x08000000, timeout=8).stdout
+        rows = [ln for ln in out.splitlines() if ln.startswith('"') and "PDH-CSV" not in ln]
+        vals = re.findall(r'"([0-9.,]+)"', rows[-1])[1:] if rows else []
+        return min(100.0, sum(float(v.replace(",", ".")) for v in vals)) if vals else None
+    except Exception:
+        return None
+
+
+def stats_loop():
+    import ctypes
+    from ctypes import wintypes as W
+    k = ctypes.windll.kernel32
+
+    class MEM(ctypes.Structure):
+        _fields_ = [("l", W.DWORD), ("load", W.DWORD), ("a", ctypes.c_ulonglong), ("b", ctypes.c_ulonglong), ("c", ctypes.c_ulonglong),
+                    ("d", ctypes.c_ulonglong), ("e", ctypes.c_ulonglong), ("f", ctypes.c_ulonglong), ("g", ctypes.c_ulonglong)]
+
+    def times():
+        a, b, c = W.FILETIME(), W.FILETIME(), W.FILETIME()
+        k.GetSystemTimes(ctypes.byref(a), ctypes.byref(b), ctypes.byref(c))
+        f = lambda x: (x.dwHighDateTime << 32) | x.dwLowDateTime
+        return f(a), f(b) + f(c)
+    prev, n = times(), 0
+    while OV["on"]:
+        fl = OV["flags"]
+        try:
+            idle, tot = times()
+            if tot > prev[1]:
+                OV["stats"]["cpu"] = max(0, min(100, 100 * (1 - (idle - prev[0]) / (tot - prev[1]))))
+            prev = (idle, tot)
+            m = MEM()
+            m.l = ctypes.sizeof(MEM)
+            k.GlobalMemoryStatusEx(ctypes.byref(m))
+            OV["stats"]["ram"] = m.load
+            if n % 3 == 0 and OV["gpid"]:
+                if fl.get("gpu"):
+                    OV["stats"]["gpu"] = gpu_percent(OV["gpid"])
+                if fl.get("ping"):
+                    host = game_server()
+                    ms = ping_ms(host or "1.1.1.1")
+                    OV["stats"]["ping"] = (ms, bool(host))
+        except Exception as e:
+            OV["err"] = "Messwerte: %s: %s" % (type(e).__name__, e)
+        n += 1
+        time.sleep(2)
+
+
+def ov_lines():
+    fl, st, out = OV["flags"], OV["stats"], []
+    if fl.get("fps"):
+        out.append(("FPS %d" % round(OV["fps"])) if OV["fps"] > 0 else (OV["fpsmsg"] or "FPS …"))
+    if fl.get("ping") and st.get("ping") and st["ping"][0] is not None:
+        out.append("%s %d ms" % ("Ping" if st["ping"][1] else "Netz", st["ping"][0]))
+    if fl.get("cpu") and st.get("cpu") is not None:
+        out.append("CPU %d %%" % round(st["cpu"]))
+    if fl.get("gpu") and st.get("gpu") is not None:
+        out.append("GPU %d %%" % round(st["gpu"]))
+    if fl.get("ram") and st.get("ram") is not None:
+        out.append("RAM %d %%" % st["ram"])
+    if fl.get("clock"):
+        out.append(time.strftime("%H:%M"))
+    return out
+
+
 def _ov_thread():
     try:
         import ctypes
@@ -846,7 +1071,6 @@ def _ov_thread():
         sig(u.SetWindowPos, W.BOOL, H, H, I, I, I, I, W.UINT)
         sig(u.InvalidateRect, W.BOOL, H, H, W.BOOL)
         sig(u.SetTimer, ctypes.c_size_t, H, ctypes.c_size_t, W.UINT, H)
-        sig(u.RegisterHotKey, W.BOOL, H, I, W.UINT, W.UINT)
         sig(u.GetMessageW, W.BOOL, ctypes.POINTER(W.MSG), H, W.UINT, W.UINT)
         sig(u.TranslateMessage, W.BOOL, ctypes.POINTER(W.MSG))
         sig(u.DispatchMessageW, LR, ctypes.POINTER(W.MSG))
@@ -867,11 +1091,6 @@ def _ov_thread():
         sig(g.CreatePen, H, I, I, W.COLORREF)
         sig(g.GetStockObject, H, I)
         sig(g.CreateFontW, H, I, I, I, I, I, I, I, I, I, I, I, I, I, W.LPCWSTR)
-        try:
-            u.SetProcessDPIAware()
-        except Exception:
-            pass
-        sw, sh = u.GetSystemMetrics(0), u.GetSystemMetrics(1)
         KEY = 0x00FF00FF
         fonts = {}
 
@@ -894,7 +1113,16 @@ def _ov_thread():
                 r = W.RECT(int(x + dx), int(y + dy), int(x + w + dx), int(y + h + dy))
                 u.DrawTextW(dc, s, -1, ctypes.byref(r), flags)
 
-        def draw(dc):
+        def box(dc, x1, y1, x2, y2, edge, fill):
+            pen, br = g.CreatePen(0, 1, edge), g.CreateSolidBrush(fill)
+            op, ob = g.SelectObject(dc, pen), g.SelectObject(dc, br)
+            g.RoundRect(dc, x1, y1, x2, y2, 12, 12)
+            g.SelectObject(dc, op)
+            g.SelectObject(dc, ob)
+            g.DeleteObject(pen)
+            g.DeleteObject(br)
+
+        def draw(dc, sw, sh):
             rect(dc, 0, 0, sw, sh, KEY)
             c = OV["cross"]
             if c:
@@ -912,7 +1140,7 @@ def _ov_thread():
                 elif st == "dot":
                     rect(dc, cx - t - 1, cy - t - 1, cx + t + 2, cy + t + 2, col)
                 else:
-                    pen, old = g.CreatePen(0, t, col), None
+                    pen = g.CreatePen(0, t, col)
                     old = g.SelectObject(dc, pen)
                     ob = g.SelectObject(dc, g.GetStockObject(5))
                     g.Ellipse(dc, cx - s, cy - s, cx + s, cy + s)
@@ -920,56 +1148,69 @@ def _ov_thread():
                     g.SelectObject(dc, old)
                     g.DeleteObject(pen)
                     rect(dc, cx - 1, cy - 1, cx + 2, cy + 2, col)
-            if OV["showfps"]:
-                label = "FPS %d" % round(OV["fps"]) if OV["fps"] > 0 else (OV["fpsmsg"] or "FPS …")
-                text(dc, label, sw - 460, 14, 440, 30, 0x0CFF5C, 22 if OV["fps"] > 0 else 14, True, 0x2 | 0x20 | 0x800)
-            if OV["showkf"]:
-                y = 18
+            ky = 18
+            if OV["flags"].get("kf"):
                 for m in OV["members"]:
                     sp = m["speaking"]
                     pen = g.CreatePen(0, 3, 0x0CFF5C if sp else 0x555555)
                     br = g.CreateSolidBrush(0x1A1F1A)
                     op, ob = g.SelectObject(dc, pen), g.SelectObject(dc, br)
-                    g.Ellipse(dc, 18, y, 54, y + 36)
+                    g.Ellipse(dc, 18, ky, 54, ky + 36)
                     g.SelectObject(dc, op)
                     g.SelectObject(dc, ob)
                     g.DeleteObject(pen)
                     g.DeleteObject(br)
-                    text(dc, m["name"][:1].upper(), 18, y + 6, 36, 26, 0xFFFFFF, 17, True, 0x1 | 0x20 | 0x800)
-                    text(dc, m["name"], 62, y + 8, 230, 22, 0x0CFF5C if sp else 0xDDDDDD, 15, sp)
-                    y += 44
-                y += 6
+                    text(dc, m["name"][:1].upper(), 18, ky + 6, 36, 26, 0xFFFFFF, 17, True, 0x1 | 0x20 | 0x800)
+                    text(dc, m["name"], 62, ky + 8, 230, 22, 0x0CFF5C if sp else 0xDDDDDD, 15, sp)
+                    ky += 44
+                ky += 6
                 now = time.time()
                 OV["bubbles"] = [b for b in OV["bubbles"] if b[2] > now]
                 for who, tx, _ in OV["bubbles"]:
-                    pen, br = g.CreatePen(0, 1, 0x0CFF5C), g.CreateSolidBrush(0x141814)
-                    op, ob = g.SelectObject(dc, pen), g.SelectObject(dc, br)
-                    g.RoundRect(dc, 18, y, 430, y + 34, 14, 14)
-                    g.SelectObject(dc, op)
-                    g.SelectObject(dc, ob)
-                    g.DeleteObject(pen)
-                    g.DeleteObject(br)
-                    text(dc, "%s: %s" % (who, tx), 30, y + 6, 390, 24, 0xFFFFFF, 15)
-                    y += 40
+                    box(dc, 18, ky, 430, ky + 34, 0x0CFF5C, 0x141814)
+                    text(dc, "%s: %s" % (who, tx), 30, ky + 6, 390, 24, 0xFFFFFF, 15)
+                    ky += 40
+            lines = ov_lines()
+            if lines:
+                pos, lh, bw = OV["flags"].get("spos", "tr"), 26, 150
+                bh = len(lines) * lh + 10
+                x = 14 if pos in ("tl", "bl") else sw - bw - 14
+                y = (ky + 8 if OV["flags"].get("kf") else 14) if pos == "tl" else (14 if pos == "tr" else sh - bh - 14)
+                box(dc, x, y, x + bw, y + bh, 0x2A4A2A, 0x0A0F0A)
+                for i, ln in enumerate(lines):
+                    first = i == 0 and ln.startswith("FPS ") and OV["fps"] > 0
+                    text(dc, ln, x + 12, y + 6 + i * lh, bw - 20, lh, 0x0CFF5C if first else 0xEEEEEE, 18 if first else 15, first)
+        st = dict(pos=None, shown=False)
 
         def proc(hwnd, msg, wp, lp):
             try:
                 if msg == 0x000F:
+                    r = OV["rect"] or (0, 0, 100, 100)
+                    sw, sh = r[2], r[3]
                     ps = PS()
                     hdc = u.BeginPaint(hwnd, ctypes.byref(ps))
                     mdc = g.CreateCompatibleDC(hdc)
                     bmp = g.CreateCompatibleBitmap(hdc, sw, sh)
                     old = g.SelectObject(mdc, bmp)
-                    draw(mdc)
+                    draw(mdc, sw, sh)
                     g.BitBlt(hdc, 0, 0, sw, sh, mdc, 0, 0, 0x00CC0020)
                     g.SelectObject(mdc, old)
                     g.DeleteObject(bmp)
                     g.DeleteDC(mdc)
                     u.EndPaint(hwnd, ctypes.byref(ps))
                     return 0
-                if msg == 0x0113:
-                    u.SetWindowPos(hwnd, H(-1), 0, 0, 0, 0, 0x13)
-                    u.InvalidateRect(hwnd, None, False)
+                if msg == 0x0113:  # Timer: auf das Spielfenster legen, ausblenden wenn das Spiel nicht vorne ist
+                    r = OV["rect"]
+                    if r and OV["target_vis"] and OV["visible"]:
+                        if r != st["pos"] or not st["shown"]:
+                            u.SetWindowPos(hwnd, H(-1), r[0], r[1], r[2], r[3], 0x10 | 0x40)
+                            st["pos"], st["shown"] = r, True
+                        else:
+                            u.SetWindowPos(hwnd, H(-1), 0, 0, 0, 0, 0x13)
+                        u.InvalidateRect(hwnd, None, False)
+                    elif st["shown"]:
+                        u.ShowWindow(hwnd, 0)
+                        st["shown"] = False
                     return 0
                 if msg == 0x0014:
                     return 1
@@ -979,29 +1220,31 @@ def _ov_thread():
                 if msg == 0x0002:
                     u.PostQuitMessage(0)
                     return 0
-            except Exception:
+            except Exception as e:
+                OV["err"] = "Zeichnen: %s: %s" % (type(e).__name__, e)
                 return 0
             return u.DefWindowProcW(hwnd, msg, wp, lp)
         cb = WNDPROC(proc)
         wc = WNDCLASS()
         wc.lpfnWndProc, wc.hInstance, wc.lpszClassName = cb, k.GetModuleHandleW(None), "DHubOverlay"
         u.RegisterClassW(ctypes.byref(wc))
-        # TOPMOST | LAYERED | TRANSPARENT (Klicks gehen durch) | TOOLWINDOW | NOACTIVATE
+        # TOPMOST | LAYERED | TRANSPARENT (Klicks gehen durch) | TOOLWINDOW | NOACTIVATE; zunaechst unsichtbar
         hwnd = u.CreateWindowExW(0x8 | 0x80000 | 0x20 | 0x80 | 0x08000000, "DHubOverlay", "D-Hub Overlay", 0x80000000,
-                                 0, 0, sw, sh, None, None, wc.hInstance, None)
+                                 0, 0, 100, 100, None, None, wc.hInstance, None)
         if not hwnd:
             raise OSError("Overlay-Fenster konnte nicht erstellt werden")
         OV["hwnd"] = hwnd
         u.SetLayeredWindowAttributes(hwnd, KEY, 0, 1)
-        u.ShowWindow(hwnd, 4)
-        u.SetTimer(hwnd, 1, 250, None)
+        u.SetTimer(hwnd, 1, 200, None)
+        threading.Thread(target=game_loop, daemon=True).start()
+        threading.Thread(target=stats_loop, daemon=True).start()
         msg = W.MSG()
         while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
             u.TranslateMessage(ctypes.byref(msg))
             u.DispatchMessageW(ctypes.byref(msg))
     except Exception as e:
         OV["err"] = "%s: %s" % (type(e).__name__, e)
-    OV["on"], OV["hwnd"] = False, 0
+    OV.update(on=False, hwnd=0, gpid=0, ghwnd=0, rect=None, target_vis=False)
     stop_fps()
 
 
@@ -1078,7 +1321,7 @@ def fps_loop():
             if time.time() - last > 0.5:
                 last = time.time()
                 try:
-                    fl = frames.get(fg_pid()) or max(frames.values(), key=lambda x: x[-1][0])
+                    fl = frames.get(str(OV["gpid"]) if OV["gpid"] else fg_pid()) or max(frames.values(), key=lambda x: x[-1][0])
                     OV["fps"] = 1000.0 / max(0.01, sum(m for _, m in fl) / len(fl)) if time.time() - fl[-1][0] < 3 else 0.0
                 except Exception:
                     pass
@@ -1106,8 +1349,8 @@ def launch(gid, st, install=False):
                     else:
                         print("Demo-Start:", g["title"], st)
                     cfg = gamecfg(gid)
-                    if cfg["cross"] or cfg["fps"] or cfg["kf"]:
-                        ov_apply(cfg)
+                    if cfg_on(cfg):
+                        ov_apply(cfg, gid)
                 elif install and IS_WIN:
                     os.startfile(("steam://install/" if st == "Steam" else "goggalaxy://openGameView/") + v["sid"])
 
@@ -1410,10 +1653,10 @@ def do_action(b):
     elif n == "gamecfg" and isinstance(b.get("id"), str):
         store.setdefault("gamecfg", {})[b["id"][:80]] = clean_cfg(b.get("cfg"))
         save()
-        if OV["on"]:
-            ov_apply(gamecfg(b["id"]))
+        if OV["on"] and store.get("lastovgid") == b["id"]:
+            ov_apply(gamecfg(b["id"]), b["id"])
     elif n == "ovstart" and IS_WIN and isinstance(b.get("id"), str):
-        ov_apply(gamecfg(b["id"]))
+        ov_apply(gamecfg(b["id"]), b["id"])
     elif n == "ovstop":
         ov_stop()
     elif n == "kfvoice":
@@ -1477,7 +1720,7 @@ def state():
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
     return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]] + ([LIB["gal_info"]] if LIB.get("gal_info") else []), perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
-                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), winopen=time.time() - LAST[0] < 6, native=WINMODE[0].startswith("eigenes"), gamecfg=store.get("gamecfg") or {}, hk=dict(toggle=hk_name("hk_toggle"), close=hk_name("hk_close")), ov=dict(on=OV["on"], err=OV["err"], fps=OV["fps"], msg=OV["fpsmsg"]), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
+                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), winopen=time.time() - LAST[0] < 6, native=WINMODE[0].startswith("eigenes"), gamecfg=store.get("gamecfg") or {}, hk=dict(toggle=hk_name("hk_toggle"), close=hk_name("hk_close")), ov=dict(target=OV["target"], on=OV["on"], err=OV["err"], fps=OV["fps"], msg=OV["fpsmsg"]), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 
 
 PAGE = r'''<!DOCTYPE html>
@@ -1643,7 +1886,7 @@ const HKS=['F7','F8','F9','F10','F11','F12','Strg+F9','Strg+F10','Alt+F9','Alt+F
 function closeCfg(){$('#gm').classList.remove('on')}
 function openCfg(id){
  const g=S.games.find(x=>x.id==id);if(!g)return;
- const c=Object.assign({cross:false,cstyle:'cross',ccolor:'#5cff0c',csize:12,cgap:4,cthick:2,fps:false,kf:false},(S.gamecfg||{})[id]||{});
+ const c=Object.assign({cross:false,cstyle:'cross',ccolor:'#5cff0c',csize:12,cgap:4,cthick:2,fps:false,kf:false,ping:false,cpu:false,gpu:false,ram:false,clock:false,spos:'tr'},(S.gamecfg||{})[id]||{});
  window._cfgId=id;window._cfg=c;
  const ck=(k,l,d)=>`<label class="row" style="cursor:pointer"><span style="flex:1">${l}${d?`<div class="dim">${d}</div>`:''}</span><input type="checkbox" ${c[k]?'checked':''} onchange="cfgSet('${k}',this.checked)"></label>`;
  const num=(k,l,lo,hi)=>`<div class="row"><span style="width:110px">${l}</span><input type="range" min="${lo}" max="${hi}" value="${c[k]}" style="flex:1" oninput="this.nextElementSibling.textContent=this.value" onchange="cfgSet('${k}',+this.value)"><span style="width:28px;text-align:right">${c[k]}</span></div>`;
@@ -1652,9 +1895,10 @@ function openCfg(id){
   <div class="row"><span style="width:110px">Form</span><select onchange="cfgSet('cstyle',this.value)">${[['cross','Kreuz mit Lücke'],['plus','Plus'],['dot','Punkt'],['circle','Kreis']].map(([v,l])=>`<option value="${v}" ${v==c.cstyle?'selected':''}>${l}</option>`).join('')}</select>
   <input type="color" value="${c.ccolor}" onchange="cfgSet('ccolor',this.value)" title="Farbe" style="margin-left:8px;width:44px;height:30px"></div>
   ${num('csize','Größe',2,60)}${num('cgap','Lücke',0,30)}${num('cthick','Dicke',1,8)}</div>
- <div class="panel"><b>Anzeigen</b>${ck('fps','FPS-Anzeige (oben rechts)','Lädt beim ersten Mal das kostenlose Intel-Tool PresentMon herunter. Braucht meist Administrator-Rechte.')}
+ <div class="panel"><b>Anzeigen</b>${ck('fps','FPS','Lädt beim ersten Mal das kostenlose Intel-Tool PresentMon herunter. Braucht meist Administrator-Rechte.')}${ck('ping','Ping','Zur Gegenstelle des Spiels, sonst zum Internet allgemein.')}${ck('cpu','CPU-Auslastung')}${ck('gpu','GPU-Auslastung','Nur dieses Spiel, über die Windows-Zähler.')}${ck('ram','Arbeitsspeicher')}${ck('clock','Uhrzeit')}
+  <div class="row"><span style="flex:1">Position der Werte</span><select onchange="cfgSet('spos',this.value)">${[['tr','oben rechts'],['tl','oben links'],['br','unten rechts'],['bl','unten links']].map(([v,l])=>`<option value="${v}" ${v==c.spos?'selected':''}>${l}</option>`).join('')}</select></div>
   ${ck('kf','KumpelFunk-Overlay (oben links)','Zeigt, wer spricht, und neue Chat-Nachrichten. Läuft nur, wenn KumpelFunk die Daten an D-Hub schickt.')}</div>
- <p class="dim">Das Overlay erscheint, wenn du das Spiel über D-Hub startest. Es klappt in Fenster- und Randlos-Modus, nicht im exklusiven Vollbild. <b>${S.hk.toggle}</b> blendet es ein oder aus, <b>${S.hk.close}</b> beendet oder startet es. Beides funktioniert auch im Spiel. Die Tasten änderst du unter Einstellungen → Allgemein. Wenn du D-Hub schließt, schließt sich das Overlay mit.${S.ov&&S.ov.err?`<br><span style="color:var(--warn)">Fehler: ${esc(S.ov.err)}</span>`:''}</p>
+ <p class="dim">Das Overlay hängt sich an das Fenster des Spiels, das du über D-Hub startest, und liegt nur über diesem Spiel, nicht über dem ganzen Monitor. Es erscheint nur, solange das Spiel vorne ist. Es klappt im Fenster-, Randlos- und normalen Vollbildmodus von Windows, nicht im exklusiven Vollbild (dort stellst du im Spiel „Randlos“ ein).${S.ov&&S.ov.on?`<br>Verknüpft mit: <b>${esc(S.ov.target)}</b>`:''} <b>${S.hk.toggle}</b> blendet es ein oder aus, <b>${S.hk.close}</b> beendet oder startet es. Beides funktioniert auch im Spiel. Die Tasten änderst du unter Einstellungen → Allgemein. Wenn du D-Hub schließt, schließt sich das Overlay mit.${S.ov&&S.ov.err?`<br><span style="color:var(--warn)">Fehler: ${esc(S.ov.err)}</span>`:''}</p>
  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" onclick="api('action',{name:'ovstart',id:'${id}'}).then(()=>{toast('Overlay läuft')});closeCfg()">Overlay jetzt starten</button>
  <button class="btn" onclick="api('action',{name:'ovstop'});toast('Overlay beendet')">Overlay beenden</button><button class="btn" onclick="closeCfg()">Schließen</button></div>`;
  $('#gm').classList.add('on')}

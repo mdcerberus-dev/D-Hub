@@ -1,4 +1,4 @@
-"""D-Hub Beta 1.7 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
+"""D-Hub Beta 1.9 - ein Hub fuer Steam, Epic, GOG und mehr. Nur Python 3 noetig, keine Pakete."""
 import os, sys, json, re, glob, time, threading, subprocess, shutil, webbrowser
 import urllib.request, urllib.parse, sqlite3, tempfile, sysconfig, html
 import xml.etree.ElementTree as ET
@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "1.7"
+VERSION = "1.9"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -27,6 +27,28 @@ if store.get("pricev") != 3:
 
 def save():
     json.dump(store, open(DATA, "w", encoding="utf-8"), indent=1)
+
+
+LOGF = os.path.join(HERE, "dhub.log")
+
+
+def log(msg):
+    try:
+        if os.path.exists(LOGF) and os.path.getsize(LOGF) > 200000:
+            old = open(LOGF, encoding="utf-8", errors="replace").read()[-60000:]
+            open(LOGF, "w", encoding="utf-8").write(old)
+        open(LOGF, "a", encoding="utf-8").write("%s  %s\n" % (time.strftime("%d.%m. %H:%M:%S"), msg))
+    except Exception:
+        pass
+
+
+def debug_info():
+    try:
+        tail = "".join(open(LOGF, encoding="utf-8", errors="replace").readlines()[-40:])
+    except Exception:
+        tail = "(noch kein Protokoll)"
+    return "D-Hub %s\nFenster: %s\nProgramm: %s\nOrdner: %s\nPort: %s\nSpiele: %d\nDiagnose: %s\nOverlay-Fehler: %s\n\nProtokoll (dhub.log):\n%s" % (
+        VERSION, WINMODE[0], sys.executable, HERE, PORT, len(LIB["games"]), " | ".join(LIB["diag"]), OV["err"] or "-", tail)
 
 
 def norm(t):
@@ -337,20 +359,36 @@ def run_window(url):
         win = webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805")
         WIN[0] = win
 
-        def on_closing():
-            if OV["on"] and OV["showkf"]:  # KumpelFunk laeuft in diesem Fenster: weiterlaufen lassen, nur verstecken
-                OV["hidden"] = True
-                win.hide()
-                return False
-        win.events.closing += on_closing
         data = os.path.join(HERE, "webview-data")
+        def watch():
+            """Bleibt das Fenster schwarz/leer, wird neu geladen. Hilft das nicht, kommt eine Fehlerseite mit Knoepfen."""
+            for attempt in range(2):
+                time.sleep(9)
+                try:
+                    ok = win.evaluate_js("!!window.__ok")
+                except Exception:
+                    ok = False
+                if ok:
+                    return
+                log("Fenster blieb leer, lade neu (Versuch %d)" % (attempt + 1))
+                try:
+                    win.load_url(url + "?r=%d" % int(time.time()))
+                except Exception as e:
+                    log("load_url: %s" % e)
+            try:
+                win.load_html('<body style="background:#050805;color:#ddd;font:15px system-ui;padding:40px"><h2>D-Hub startet nicht richtig</h2>'
+                              '<p><a style="color:#5cff0c" href="%s">Neu laden</a></p><pre style="white-space:pre-wrap;color:#9a9">%s</pre></body>'
+                              % (url, debug_info().replace("&", "&amp;").replace("<", "&lt;")))
+            except Exception:
+                pass
         try:
-            webview.start(gui="edgechromium", private_mode=False, storage_path=data)
+            webview.start(watch, gui="edgechromium", private_mode=False, storage_path=data)
         except TypeError:
-            webview.start(gui="edgechromium")
+            webview.start(watch, gui="edgechromium")
         return True
     except Exception as e:
         WINMODE[0] = "Edge-Fallback, weil: %s: %s" % (type(e).__name__, e)
+        log(WINMODE[0])
         return False
 
 
@@ -656,6 +694,8 @@ def clean_cfg(c):
 
 
 def ov_apply(cfg):
+    store["lastov"] = cfg
+    save()
     OV["cross"] = cfg if cfg.get("cross") else None
     OV["showfps"] = bool(cfg.get("fps"))
     OV["showkf"] = bool(cfg.get("kf"))
@@ -684,11 +724,6 @@ def ov_stop():
             ctypes.windll.user32.PostMessageW(ctypes.c_void_p(OV["hwnd"]), 0x0010, 0, 0)
     except Exception:
         pass
-    if OV["hidden"] and WIN[0]:  # versteckt weitergelaufenes D-Hub-Fenster jetzt wirklich schliessen
-        try:
-            WIN[0].destroy()
-        except Exception:
-            pass
 
 
 def ov_bubble(sender, text):
@@ -709,6 +744,76 @@ def _hex(c):
     if (r, g, b) == (255, 0, 255):
         g = 1
     return r | g << 8 | b << 16
+
+
+HK_KEYS = {"F7": (0, 0x76), "F8": (0, 0x77), "F9": (0, 0x78), "F10": (0, 0x79), "F11": (0, 0x7A), "F12": (0, 0x7B),
+           "Strg+F9": (2, 0x78), "Strg+F10": (2, 0x79), "Alt+F9": (1, 0x78), "Alt+F10": (1, 0x79),
+           "Strg+Umschalt+F9": (6, 0x78), "Strg+Umschalt+F10": (6, 0x79)}
+HK_DEF = dict(hk_toggle="Strg+F9", hk_close="Strg+F10")
+HK = dict(tid=0)
+
+
+def hk_name(k):
+    v = store["settings"].get(k)
+    return v if v in HK_KEYS else HK_DEF[k]
+
+
+def hk_reload():
+    if IS_WIN and HK["tid"]:
+        import ctypes
+        ctypes.windll.user32.PostThreadMessageW(HK["tid"], 0x8001, 0, 0)
+
+
+def ov_toggle_visible():
+    """Ein- und ausblenden. Laeuft noch kein Overlay, wird es mit den zuletzt benutzten Einstellungen gestartet."""
+    if not OV["on"]:
+        ov_apply(clean_cfg(store.get("lastov")))
+        return
+    import ctypes
+    OV["visible"] = not OV["visible"]
+    if OV["hwnd"]:
+        ctypes.windll.user32.ShowWindow(ctypes.c_void_p(OV["hwnd"]), 4 if OV["visible"] else 0)
+
+
+def ov_toggle_run():
+    """Overlay ganz beenden oder (neu) starten."""
+    if OV["on"]:
+        ov_stop()
+    else:
+        ov_apply(clean_cfg(store.get("lastov")))
+
+
+def hotkey_loop():
+    if not IS_WIN:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes as W
+        u, k = ctypes.windll.user32, ctypes.windll.kernel32
+        u.RegisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_int, W.UINT, W.UINT]
+        u.UnregisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        u.PostThreadMessageW.argtypes = [W.DWORD, W.UINT, W.WPARAM, W.LPARAM]
+        HK["tid"] = k.GetCurrentThreadId()
+        msg = W.MSG()
+        u.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)  # Nachrichtenschlange dieses Threads anlegen
+        while True:
+            for i, nm in ((1, hk_name("hk_toggle")), (2, hk_name("hk_close"))):
+                u.UnregisterHotKey(None, i)
+                mod, vk = HK_KEYS[nm]
+                u.RegisterHotKey(None, i, mod | 0x4000, vk)  # 0x4000 = nicht wiederholen
+            while True:
+                r = u.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                if r <= 0:
+                    return
+                if msg.message == 0x8001:
+                    break
+                if msg.message == 0x0312:
+                    try:
+                        (ov_toggle_visible if msg.wParam == 1 else ov_toggle_run)()
+                    except Exception as e:
+                        OV["err"] = "%s: %s" % (type(e).__name__, e)
+    except Exception as e:
+        OV["err"] = "Tastenkuerzel: %s: %s" % (type(e).__name__, e)
 
 
 def _ov_thread():
@@ -866,13 +971,6 @@ def _ov_thread():
                     u.SetWindowPos(hwnd, H(-1), 0, 0, 0, 0, 0x13)
                     u.InvalidateRect(hwnd, None, False)
                     return 0
-                if msg == 0x0312:
-                    if wp == 1:
-                        OV["visible"] = not OV["visible"]
-                        u.ShowWindow(hwnd, 4 if OV["visible"] else 0)
-                    else:
-                        ov_stop()
-                    return 0
                 if msg == 0x0014:
                     return 1
                 if msg == 0x0010:
@@ -897,8 +995,6 @@ def _ov_thread():
         u.SetLayeredWindowAttributes(hwnd, KEY, 0, 1)
         u.ShowWindow(hwnd, 4)
         u.SetTimer(hwnd, 1, 250, None)
-        u.RegisterHotKey(hwnd, 1, 0x2 | 0x4, 0x78)  # Strg+Umschalt+F9: ein/aus
-        u.RegisterHotKey(hwnd, 2, 0x2 | 0x4, 0x79)  # Strg+Umschalt+F10: Overlay beenden
         msg = W.MSG()
         while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
             u.TranslateMessage(ctypes.byref(msg))
@@ -1322,6 +1418,9 @@ def do_action(b):
         ov_stop()
     elif n == "kfvoice":
         ov_voice(b.get("members"))
+    elif n == "restartapp":
+        ov_stop()
+        restart()
     elif n == "opendata" and IS_WIN:
         os.startfile(HERE)
     elif n == "clearprices":
@@ -1358,8 +1457,12 @@ def watcher():
     """Beendet D-Hub, wenn das Fenster geschlossen wurde (und keine Downloads mehr laufen)."""
     while True:
         time.sleep(1)
-        busy = OV["on"] or any(d["state"] in ("running", "queued") for d in downloads)
-        if BYE[0] and LAST[0] <= BYE[0] and time.time() - BYE[0] > 4 and not busy:
+        busy = any(d["state"] in ("running", "queued") for d in downloads)
+        gone = BYE[0] and LAST[0] <= BYE[0] and time.time() - BYE[0] > 4
+        if gone and OV["on"]:  # D-Hub-Fenster ist zu: Overlay und FPS-Messung sofort mit beenden
+            ov_stop()
+        if gone and not busy:
+            ov_stop()
             os._exit(0)
 
 
@@ -1374,7 +1477,7 @@ def state():
         g["psrc"] = "Manuell" if manual is not None else (lp or {}).get("src", "")
     return dict(games=LIB["games"], demo=LIB["demo"], launchers=LIB["launchers"], pending=pending, version=VERSION, diag=list(LIB["diag"]) + ["Fenster: " + WINMODE[0]] + ([LIB["gal_info"]] if LIB.get("gal_info") else []), perr=LIB["perr"],
                 downloads=downloads, settings={k: v for k, v in store["settings"].items() if k != "steamkey"},
-                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), gamecfg=store.get("gamecfg") or {}, ov=dict(on=OV["on"], err=OV["err"], fps=OV["fps"], msg=OV["fpsmsg"]), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
+                errs=LIB["errs"], busy=LIB["busy"], upd=upd_public(), inbox=inbox_public(), unread=unread_count(), kf=store.get("kf") or {}, perms=dict(mic=consent("microphone"), cam=consent("webcam")), autostart=autostart_get(), winopen=time.time() - LAST[0] < 6, native=WINMODE[0].startswith("eigenes"), gamecfg=store.get("gamecfg") or {}, hk=dict(toggle=hk_name("hk_toggle"), close=hk_name("hk_close")), ov=dict(on=OV["on"], err=OV["err"], fps=OV["fps"], msg=OV["fpsmsg"]), uninst=bool(uninstaller()), galaxy=os.path.exists(GALAXY_DB), haskey=bool(store["settings"].get("steamkey")), legendary=bool(find_legendary()))
 
 
 PAGE = r'''<!DOCTYPE html>
@@ -1500,6 +1603,9 @@ footer{padding:9px 24px;border-top:1px solid var(--line);color:var(--dim);font-s
 <div class="pop" id="frpop"><h3>Freunde</h3><div class="body" id="frbody"></div></div>
 <div id="lost"><div><b style="font-size:18px">D-Hub wurde beendet oder startet neu.</b><p class="dim">Nach einem Update öffnet sich automatisch ein neues Fenster.<br>Du kannst dieses Fenster schließen.</p></div></div>
 <div id="ubanner"></div>
+<div id="wd" style="display:none;position:fixed;inset:0;z-index:99;background:#050805;color:#ddd;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:24px;overflow:auto"><b style="font-size:18px">D-Hub startet nicht richtig?</b><div style="color:#9a9">Probier zuerst "Neu laden". Wenn das nicht hilft, "D-Hub neu starten".</div>
+<div><button class="btn pri" onclick="location.reload()">Neu laden</button> <button class="btn" onclick="dbg()">Debug anzeigen</button> <button class="btn" onclick="fetch('/api/action',{method:'POST',body:JSON.stringify({name:'restartapp'})})">D-Hub neu starten</button> <button class="btn" onclick="document.getElementById('wd').style.display='none'">Schließen</button></div>
+<pre id="wdp" style="text-align:left;max-width:900px;white-space:pre-wrap;font-size:12px;color:#9a9"></pre></div>
 <div id="gm" onclick="if(event.target==this)closeCfg()"><div class="box" id="gmb"></div></div>
 <main></main>
 <div id="kfwrap" class="hide"><div class="bar"><span style="flex:1">KumpelFunk von Lerun3. Das Gespräch läuft weiter, wenn du den Reiter wechselst.</span>
@@ -1508,6 +1614,13 @@ footer{padding:9px 24px;border-top:1px solid var(--line);color:var(--dim);font-s
   sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe></div><div id="toast"></div>
 <footer id="status">Bereit</footer>
 <script>
+window.__errs=[];
+function __e(m){__errs.push(m);try{fetch('/api/jslog',{method:'POST',body:JSON.stringify({m:String(m).slice(0,400)})})}catch(x){}}
+addEventListener('error',e=>__e((e.message||'Fehler')+' @'+(e.lineno||'?')));
+addEventListener('unhandledrejection',e=>__e('Promise: '+((e.reason&&e.reason.message)||e.reason)));
+async function dbg(){const w=document.getElementById('wd');w.style.display='flex';let t='';try{t=await (await fetch('/api/debug')).text()}catch(e){t='Server nicht erreichbar: '+e}document.getElementById('wdp').textContent=t+'\n\nJS-Fehler:\n'+(__errs.join('\n')||'-')}
+setTimeout(()=>{if(!window.__ok)document.getElementById('wd').style.display='flex'},7000);
+addEventListener('keydown',e=>{if(e.key=='F5'){e.preventDefault();location.reload()}if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()=='d'){e.preventDefault();dbg()}});
 const KF_URL='https://kumpelfunk.lerun3-funk.workers.dev';
 let S=null,tab='Alle',q='',navKey=null,flt='all',stab='Allgemein';
 const $=s=>document.querySelector(s), SCANNED=['Steam','Epic','GOG','Ubisoft','EA','Battle.net'];
@@ -1526,6 +1639,7 @@ const installed=g=>g.versions.some(v=>v.installed);
 function visible(){return S.games.filter(g=>(tab=='Alle'||g.versions.some(v=>v.store==tab))&&g.title.toLowerCase().includes(q)&&(flt=='all'||(flt=='inst')==installed(g)))
  .sort((a,b)=>a.title.localeCompare(b.title))}
 
+const HKS=['F7','F8','F9','F10','F11','F12','Strg+F9','Strg+F10','Alt+F9','Alt+F10','Strg+Umschalt+F9','Strg+Umschalt+F10'];
 function closeCfg(){$('#gm').classList.remove('on')}
 function openCfg(id){
  const g=S.games.find(x=>x.id==id);if(!g)return;
@@ -1540,7 +1654,7 @@ function openCfg(id){
   ${num('csize','Größe',2,60)}${num('cgap','Lücke',0,30)}${num('cthick','Dicke',1,8)}</div>
  <div class="panel"><b>Anzeigen</b>${ck('fps','FPS-Anzeige (oben rechts)','Lädt beim ersten Mal das kostenlose Intel-Tool PresentMon herunter. Braucht meist Administrator-Rechte.')}
   ${ck('kf','KumpelFunk-Overlay (oben links)','Zeigt, wer spricht, und neue Chat-Nachrichten. Läuft nur, wenn KumpelFunk die Daten an D-Hub schickt.')}</div>
- <p class="dim">Das Overlay erscheint, wenn du das Spiel über D-Hub startest. Es klappt in Fenster- und Randlos-Modus, nicht im exklusiven Vollbild. <b>Strg+Umschalt+F9</b> blendet es ein/aus, <b>Strg+Umschalt+F10</b> beendet es.${S.ov&&S.ov.err?`<br><span style="color:var(--warn)">Fehler: ${esc(S.ov.err)}</span>`:''}</p>
+ <p class="dim">Das Overlay erscheint, wenn du das Spiel über D-Hub startest. Es klappt in Fenster- und Randlos-Modus, nicht im exklusiven Vollbild. <b>${S.hk.toggle}</b> blendet es ein oder aus, <b>${S.hk.close}</b> beendet oder startet es. Beides funktioniert auch im Spiel. Die Tasten änderst du unter Einstellungen → Allgemein. Wenn du D-Hub schließt, schließt sich das Overlay mit.${S.ov&&S.ov.err?`<br><span style="color:var(--warn)">Fehler: ${esc(S.ov.err)}</span>`:''}</p>
  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" onclick="api('action',{name:'ovstart',id:'${id}'}).then(()=>{toast('Overlay läuft')});closeCfg()">Overlay jetzt starten</button>
  <button class="btn" onclick="api('action',{name:'ovstop'});toast('Overlay beendet')">Overlay beenden</button><button class="btn" onclick="closeCfg()">Schließen</button></div>`;
  $('#gm').classList.add('on')}
@@ -1630,7 +1744,7 @@ function setView0(){
   row('Standardansicht',sel('view',[['cover','Cover'],['list','Liste']],T.view))+
   row('Start-Reiter',sel('starttab',['Alle',...L,'Downloads','Wert','KumpelFunk'].map(x=>[x,x]),T.starttab||'Alle'))+
   row('Mit Windows starten',chk(S.autostart,"api('action',{name:'autostart',on:this.checked}).then(render)"))+
-  row('Preise automatisch laden',chk(T.autoprices!==false,"api('settings',{autoprices:this.checked})"))+row('KumpelFunk beim Start verbinden',chk(T.kfauto!==false,"api('settings',{kfauto:this.checked})"))+row('Updates automatisch suchen',chk(T.autoupdate!==false,"api('settings',{autoupdate:this.checked})"))+row('Updates automatisch installieren (beim Start)',chk(T.autoinstall!==false,"api('settings',{autoinstall:this.checked})"))+row('Startanimation zeigen',chk(T.splash!==false,"api('settings',{splash:this.checked});try{localStorage.setItem('dhub_nosplash',this.checked?'':'1')}catch(e){}"))+'</div>';
+  row('Preise automatisch laden',chk(T.autoprices!==false,"api('settings',{autoprices:this.checked})"))+row('KumpelFunk beim Start verbinden',chk(T.kfauto!==false,"api('settings',{kfauto:this.checked})"))+row('Updates automatisch suchen',chk(T.autoupdate!==false,"api('settings',{autoupdate:this.checked})"))+row('Updates automatisch installieren (beim Start)',chk(T.autoinstall!==false,"api('settings',{autoinstall:this.checked})"))+row('Overlay ein-/ausblenden (Taste)',sel('hk_toggle',HKS.map(x=>[x,x]),S.hk.toggle))+row('Overlay beenden/starten (Taste)',sel('hk_close',HKS.map(x=>[x,x]),S.hk.close))+row('Startanimation zeigen',chk(T.splash!==false,"api('settings',{splash:this.checked});try{localStorage.setItem('dhub_nosplash',this.checked?'':'1')}catch(e){}"))+'</div>';
  if(stab=='Berechtigungen') return h+'<div class="panel"><b>Windows</b><p class="dim">Diese Schalter gehören Windows. D-Hub kann sie nicht für dich umlegen, öffnet aber die passende Seite.</p>'+
   prow('Mikrofon (für KumpelFunk)',st(P.mic),'Öffnen',win('mic'))+prow('Kamera',st(P.cam),'Öffnen',win('cam'))+
   prow('Benachrichtigungen','','Öffnen',win('notif'))+prow('Autostart-Apps','','Öffnen',win('startup'))+prow('Windows-Sicherheit und Firewall','','Öffnen',win('security'))+
@@ -1648,7 +1762,7 @@ function setView0(){
  <div class="row"><span style="width:90px">Steam-ID</span><input id="sid" placeholder="${T.steamid||'automatisch erkannt'}" style="flex:1"></div>
  <button class="btn pri" onclick="saveSteam()">Speichern und neu laden</button></div>`;
  return h+'<div class="panel">'+row('Demo-Daten anzeigen',chk(S.demo,"api('settings',{demo:this.checked}).then(render)"))+
-  row('Datenordner öffnen',act('opendata','Öffnen'))+row('Preis-Cache leeren',act('clearprices','Leeren'))+'</div>'+
+  row('Datenordner öffnen',act('opendata','Öffnen'))+row('Fenster neu laden (bei schwarzem Bild)',`<button class="btn" onclick="location.reload()">Neu laden</button>`)+row('Debug-Info anzeigen (Strg+Umschalt+D)',`<button class="btn" onclick="dbg()">Anzeigen</button>`)+row('D-Hub neu starten',act('restartapp','Neu starten'))+row('Preis-Cache leeren',act('clearprices','Leeren'))+'</div>'+
   `<div class="panel"><b>Diagnose</b>${S.diag.map(d=>`<div class="meta">${esc(d)}</div>`).join('')}</div>`;
 }
 function render(){
@@ -1798,7 +1912,7 @@ document.addEventListener('keydown',e=>{if(e.key=='Escape'&&pop){pop='';updChrom
 $('#flt').onchange=e=>{flt=e.target.value;render()};
 $('#q').oninput=e=>{q=e.target.value.toLowerCase();render()};
 $('#vw').onclick=()=>api('settings',{view:S.settings.view=='cover'?'list':'cover'}).then(render);
-api('state').then(()=>{const st=S.settings.starttab;if(st&&['Alle',...S.launchers,'Downloads','Wert','KumpelFunk'].includes(st))tab=st;render();initKF();updChrome(true)});
+api('state').then(()=>{const st=S.settings.starttab;if(st&&['Alle',...S.launchers,'Downloads','Wert','KumpelFunk'].includes(st))tab=st;render();window.__ok=1;initKF();updChrome(true)});
 setInterval(async()=>{const a=document.activeElement,typing=a&&a.tagName=='INPUT',old=S.pending,ob=S.busy;try{await api('state');fails=0}catch(e){if(++fails>=3)$('#lost').style.display='flex';return}status();updChrome();
  if(!typing&&((ob&&!S.busy)||(tab=='Einstellungen'&&stab=='Updates'&&updSig()!=lastUpd)||tab=='Downloads'||(tab=='Wert'&&(S.pending||old))))render()},1000);
 </script></body></html>
@@ -1819,7 +1933,8 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
-        LAST[0] = time.time()
+        if "probe=1" not in self.path:
+            LAST[0] = time.time()
         if self.path.split("?")[0] == "/logo.png":
             for d in (HERE, getattr(sys, "_MEIPASS", HERE)):
                 f = os.path.join(d, "logo.png")
@@ -1828,8 +1943,11 @@ class H(BaseHTTPRequestHandler):
                     return
             self.send_error(404)
             return
-        if self.path == "/api/state":
+        base = self.path.split("?")[0]
+        if base == "/api/state":
             self.send(state())
+        elif base == "/api/debug":
+            self.send(debug_info().encode("utf-8"), "text/plain")
         else:
             self.send(PAGE.encode("utf-8"), "text/html")
 
@@ -1843,11 +1961,26 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/bye":
             if time.time() - START > 15:  # direkt nach einem Neustart ignorieren (altes Fenster schliesst sich)
                 BYE[0] = time.time()
+                LAST[0] = 0
+            self.send({})
+            return
+        if p == "/api/focus":
+            try:
+                WIN[0].restore()
+                WIN[0].show()
+                WIN[0].on_top = True
+                WIN[0].on_top = False
+            except Exception as e:
+                log("focus: %s" % e)
+            self.send({})
+            return
+        if p == "/api/jslog":
+            log("JS: %s" % str(b.get("m"))[:400])
             self.send({})
             return
         if p == "/api/quit":
             self.send({})
-            threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0))).start()
+            threading.Thread(target=lambda: (time.sleep(0.3), ov_stop(), os._exit(0))).start()
             return
         if p == "/api/launch":
             launch(b["id"], b["store"], b.get("install", False))
@@ -1862,6 +1995,8 @@ class H(BaseHTTPRequestHandler):
                 kick()
             if "steamkey" in b or "steamid" in b:
                 kick()
+            if "hk_toggle" in b or "hk_close" in b:
+                hk_reload()
             if "updrepo" in b:
                 threading.Thread(target=check_update, args=(True,), daemon=True).start()
         elif p == "/api/rescan":
@@ -1887,20 +2022,34 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     url = "http://127.0.0.1:%d" % PORT
-    try:  # laeuft D-Hub schon? Dann nur das Fenster oeffnen, bei alter Version die alte beenden
-        ex = fetch_json(url + "/api/state")
+    try:  # laeuft D-Hub schon?
+        ex = fetch_json(url + "/api/state?probe=1")
     except Exception:
         ex = None
     if ex:
-        if ex.get("version") == VERSION:
-            if not run_window(url):
-                open_window(url)
+        if ex.get("version") == VERSION and ex.get("winopen"):
+            # Es gibt schon ein offenes Fenster: nur nach vorne holen, kein zweites Fenster (das gab den schwarzen Bildschirm)
+            try:
+                if ex.get("native"):
+                    urllib.request.urlopen(urllib.request.Request(url + "/api/focus", data=b"{}"), timeout=3)
+                else:
+                    open_window(url)
+            except Exception:
+                pass
             sys.exit(0)
+        # Alte oder sterbende Instanz (Fenster schon zu, andere Version): beenden und frisch starten
+        log("Zweitstart: alte Instanz wird beendet")
         try:
             urllib.request.urlopen(urllib.request.Request(url + "/api/quit", data=b"{}"), timeout=3)
         except Exception:
             pass
-        time.sleep(1.5)
+        for _ in range(25):
+            time.sleep(0.3)
+            try:
+                fetch_json(url + "/api/state?probe=1")
+            except Exception:
+                break
+        time.sleep(0.5)
     srv = None
     for _ in range(10):
         try:
@@ -1917,13 +2066,16 @@ if __name__ == "__main__":
         scan()
     except Exception as e:
         LIB["diag"] = ["Fehler beim Einlesen der Bibliothek: %s: %s" % (type(e).__name__, e)]
-    for fn in (worker, price_worker, watcher, update_loop, apply_loop):
+    for fn in (worker, price_worker, watcher, update_loop, apply_loop, hotkey_loop):
         threading.Thread(target=fn, daemon=True).start()
     kick()
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    if run_window(url):  # Fenster wurde geschlossen: beenden, sobald keine Downloads mehr laufen
-        BYE[0] = time.time() + 1
+    log("Start, Version %s" % VERSION)
+    if run_window(url):  # Fenster wurde geschlossen: Overlay sofort zu, D-Hub beendet sich, sobald keine Downloads mehr laufen
+        ov_stop()
         LAST[0] = 0
+        BYE[0] = time.time() + 1
+        log("Fenster geschlossen")
     else:
         open_window(url)
     while True:

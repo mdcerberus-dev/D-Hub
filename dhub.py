@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.4"
+VERSION = "3.5"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -2746,16 +2746,17 @@ body.sk-gold .panel,body.sk-gold .card{border-color:rgba(255,210,63,.35)}
 .chfig{position:relative;display:inline-block;width:93px;height:119px}.chfig img{position:absolute;left:0;top:0;width:93px;height:97.5px}.chfig img.l1{left:18px;top:90px;width:21px;height:14px}.chfig img.l2{left:59px;top:90px;width:18px;height:14px}
 .chprev{width:120px;height:130px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,rgba(var(--acrgb),.18),transparent 70%);border-radius:14px}.chprev .chfig{transform:scale(1.1)}
 .chmini{width:58px;height:66px;flex:none;position:relative;overflow:hidden;display:block}.chmini .chfig{transform:scale(.55);transform-origin:0 0}
+.brand #updbtn{font:700 12px/1 'Segoe UI',sans-serif;font-style:normal;letter-spacing:.02em;padding:6px 12px;border-radius:999px;margin-left:4px;white-space:nowrap;animation:updp 1.8s ease-in-out infinite}
+@keyframes updp{0%,100%{box-shadow:0 0 0 0 rgba(var(--acrgb),.55)}50%{box-shadow:0 0 0 7px rgba(var(--acrgb),0)}}
 </style></head><body>
 <div id="splash" aria-hidden="true"><div class="sp-logo"><img src="/logo.png" alt=""></div>
  <div class="sp-tag">Alle Spiele. <b>Ein Ort.</b></div>
  <div class="sp-bar"><i></i></div></div>
 <header>
- <div class="brand"><img src="/logo.png" alt="" onerror="this.remove()"><span>D-<b>HUB</b></span><small id="ver"></small></div>
+ <div class="brand"><img src="/logo.png" alt="" onerror="this.remove()"><span>D-<b>HUB</b></span><small id="ver" title="Klicken: nach Updates suchen" style="cursor:pointer"></small><button class="btn pri" id="updbtn" style="display:none"></button></div>
  <nav></nav>
  <div id="tools"><input id="q" type="search" placeholder="Spiele suchen"><button class="btn" id="rf" title="Neu einlesen: neu installierte Spiele erscheinen hier">↻</button><button class="btn pri" id="plus" title="Eigenes Spiel hinzufügen">＋</button><button class="btn" id="vw"></button></div>
 <div id="hact">
- <button class="btn pri" id="updbtn" style="display:none"></button>
  <button class="hbtn coinchip" id="coinbtn" title="Coins und Shop" onclick="tab='Shop';render()"><span>🪙</span><b id="coinn">0</b><small id="cointitle"></small></button>
  <button class="hbtn" id="fsbtn" title="Vollbild (F11)" aria-label="Vollbild" onclick="fsToggle()"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
  <button class="hbtn" id="frbtn" title="Freunde" aria-label="Freunde"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.6"/><path d="M17 14.3c2.5.1 4.2 1.6 4.7 4.2"/></svg><span class="dot" id="frdot" hidden></span></button>
@@ -2990,7 +2991,7 @@ function render(){
   document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()})}
  if(!['Alle','Shop','Gamble','Arcade','Downloads','Patchnotes','Wert','KumpelFunk','Einstellungen',...S.launchers].includes(tab))tab='Alle';
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==tab));
- $('#ver').textContent='Beta '+S.version;
+ $('#ver').textContent='Beta '+S.version;$('#ver').onclick=()=>{api('action',{name:'checkupdate'});toast('Prüfe auf Updates …');setTimeout(()=>api('state').then(()=>{updChrome();toast(S.upd&&S.upd.state=='available'?'Update '+S.upd.latest+' ist verfügbar.':'D-Hub ist aktuell.')}),2500)};
  $('#tools').style.display=isLib()?'flex':'none';
  $('#vw').textContent=S.settings.view=='cover'?'Als Liste':'Als Cover';
  const kf=tab=='KumpelFunk';
@@ -3601,6 +3602,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.5',d:'15.11.2026',t:'Update-Knopf an der Versionsnummer',i:[['Neu','Sobald ein neues Release auf GitHub bereitliegt, erscheint direkt neben der Versionsnummer oben links ein pulsierender Knopf „Update x.y“. Ein Klick lädt das Update und startet D-Hub neu.'],['Neu','Ein Klick auf die Versionsnummer selbst sucht sofort nach Updates und meldet, ob eine neue Version da ist.']]},
  {v:'3.4',d:'15.11.2026',t:'Start-Reparatur',i:[['Fix','Startwächter: Wenn das D-Hub-Fenster beim Start leer bleibt, startet D-Hub beim nächsten Mal automatisch im Edge-Fenster und löscht dabei das beschädigte WebView2-Profil. Danach wird das eigene Fenster erneut versucht. Klappt es auch dann nicht, bleibt D-Hub dauerhaft im Edge-Fenster.'],['Fix','Fehler beim Laden werden jetzt als roter Kasten im Fenster angezeigt und in dhub.log protokolliert, statt als schwarzer Bildschirm.'],['Fix','Der Installer beendet jetzt auch die zugehörigen WebView2-Prozesse des alten D-Hub, die sonst das Fenster-Profil gesperrt halten konnten.']]},
  {v:'3.3',d:'15.11.2026',t:'Start-Absicherung',i:[['Fix','Bleibt das D-Hub-Fenster nach dem Start schwarz oder leer, öffnet D-Hub jetzt nach etwa 20 Sekunden automatisch ein Edge-Fenster mit derselben Oberfläche als Ersatz, statt nur eine Fehlerseite zu zeigen. Der Vorgang wird in dhub.log protokolliert.']]},
  {v:'3.2',d:'15.11.2026',t:'Männchen-Baukasten',i:[['Neu','Neue Blanko-Figur „Männchen“: das D-Hub-Männchen ohne Kappe, Kopfhörer, Oberteil und Schuhe. Sie ist gratis und lässt sich im Arcade-Reiter oder im Shop als Spielfigur wählen.'],['Neu','Im Shop gibt es jetzt Ausrüstung für das Männchen in fünf Plätzen: Hüte (D-Hub-Kappe, Zauberhut, Goldene Krone), Kopfhörer, Sonnenbrille, Oberteile (D-Hub-Hoodie, Goldrüstung) und Schuhe (Neon-Sneaker, Goldstiefel). Jedes Teil trägst du einzeln und kannst es jederzeit wieder ablegen.'],['Neu','Das Männchen trägt die Ausrüstung in Survivor und Invaders, inklusive Laufanimation der Schuhe. Im Shop siehst du eine Live-Vorschau deiner Figur und bei jedem Teil ein Vorschaubild.'],['Info','Das bisherige Maskottchen mit allem dran bleibt als Spielfigur „D-Hub“ unverändert erhalten. Das ist ein erstes Beispiel, weitere Teile lassen sich nach dem gleichen Muster ergänzen.']]},
@@ -3796,7 +3798,7 @@ function togglePop(n){pop=pop==n?'':n;popSig='';updChrome(true);
  if(pop=='fr')kfSend({type:'request-profile'})}
 function updChrome(force){
  const u=S.upd||{},kf=S.kf||{},av=['available','downloading','restarting'].includes(u.state);
- const ub=$('#updbtn');ub.style.display=av?'':'none';ub.textContent=u.state=='available'?'Aktualisieren auf '+u.latest:'Update läuft …';ub.disabled=u.state!='available';
+ const ub=$('#updbtn');ub.style.display=av?'':'none';ub.textContent=u.state=='available'?'⬆ Update '+u.latest:'Update läuft …';ub.title=u.state=='available'?'Jetzt auf Version '+u.latest+' aktualisieren':'';ub.disabled=u.state!='available';
  const un=S.unread||0,ml=$('#mldot');ml.hidden=!un;ml.textContent=un>9?'9+':un;
  const on=(kf.friends||[]).filter(f=>f.dhub&&f.status!='offline').length,fd=$('#frdot');fd.hidden=!on;fd.textContent=on;
  $('#mlbtn').classList.toggle('on',pop=='ml');$('#frbtn').classList.toggle('on',pop=='fr');

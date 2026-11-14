@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.2"
+VERSION = "3.3"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -377,6 +377,11 @@ def run_window(url):
                     win.load_url(url + "?r=%d" % int(time.time()))
                 except Exception as e:
                     log("load_url: %s" % e)
+            log("Fenster bleibt leer: Edge-Fenster als Ersatz")
+            try:
+                open_window(url)
+            except Exception as e:
+                log("open_window: %s" % e)
             try:
                 win.load_html('<body style="background:#050805;color:#ddd;font:15px system-ui;padding:40px"><h2>D-Hub startet nicht richtig</h2>'
                               '<p><a style="color:#5cff0c" href="%s">Neu laden</a></p><pre style="white-space:pre-wrap;color:#9a9">%s</pre></body>'
@@ -3565,6 +3570,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.3',d:'15.11.2026',t:'Start-Absicherung',i:[['Fix','Bleibt das D-Hub-Fenster nach dem Start schwarz oder leer, öffnet D-Hub jetzt nach etwa 20 Sekunden automatisch ein Edge-Fenster mit derselben Oberfläche als Ersatz, statt nur eine Fehlerseite zu zeigen. Der Vorgang wird in dhub.log protokolliert.']]},
  {v:'3.2',d:'15.11.2026',t:'Männchen-Baukasten',i:[['Neu','Neue Blanko-Figur „Männchen“: das D-Hub-Männchen ohne Kappe, Kopfhörer, Oberteil und Schuhe. Sie ist gratis und lässt sich im Arcade-Reiter oder im Shop als Spielfigur wählen.'],['Neu','Im Shop gibt es jetzt Ausrüstung für das Männchen in fünf Plätzen: Hüte (D-Hub-Kappe, Zauberhut, Goldene Krone), Kopfhörer, Sonnenbrille, Oberteile (D-Hub-Hoodie, Goldrüstung) und Schuhe (Neon-Sneaker, Goldstiefel). Jedes Teil trägst du einzeln und kannst es jederzeit wieder ablegen.'],['Neu','Das Männchen trägt die Ausrüstung in Survivor und Invaders, inklusive Laufanimation der Schuhe. Im Shop siehst du eine Live-Vorschau deiner Figur und bei jedem Teil ein Vorschaubild.'],['Info','Das bisherige Maskottchen mit allem dran bleibt als Spielfigur „D-Hub“ unverändert erhalten. Das ist ein erstes Beispiel, weitere Teile lassen sich nach dem gleichen Muster ergänzen.']]},
  {v:'3.1',d:'13.11.2026',t:'Raketen, echte Sounds, Großbild, 3D-Münze und W20',i:[['Neu','Survivor: Der Raketenwerfer feuert jetzt echte Raketen mit Flamme und Rauchspur. Sie explodieren beim Aufprall oder am Ende der Reichweite mit Feuerball, Druckwelle, Funken und Rauchwolken. Dort bleibt ein kleiner Krater am Boden, der nach einigen Sekunden verblasst. Der Bildschirm wackelt kurz, und beim Abschuss gibt es Mündungsfeuer.'],['Neu','Survivor: Realistischere Waffensounds. Die Pistole knallt mit scharfem Schuss und dumpfem Nachhall, die MP rattert kürzer und variiert, die Schrotflinte donnert und repetiert, der Raketenwerfer zischt mit Startschlag und Düsenrauschen, die Explosion grollt mit Splittergeräuschen. Das Laser-Piu gibt es nur noch in Invaders.'],['Neu','Arcade-Spiele sind jetzt deutlich größer: Beim Spielen wird die Navigationsleiste ausgeblendet und das Spielfeld füllt das Fenster. Die Spielfläche wird zudem schärfer berechnet.'],['Neu','Gamble: Der Münzwurf nutzt eine echte 3D-Münze mit Dicke und Rand. Sie fliegt hoch, dreht sich mehrfach, landet mit Hüpfern und Schatten, dazu Klingeln beim Start und Aufprall.'],['Neu','Gamble: Das Würfeln läuft mit einem 3D-W20 mit 20 Flächen und Zahlen in Gold auf dunklem Violett, mit magischer Aura, kreisenden Runenringen und Funken. Er wird geworfen, hüpft und rollt aus. Das Ergebnis bleibt serverseitig dasselbe, der W20 zeigt den Bereich (jede Zahl = 5 Prozentpunkte).'],['Neu','Gamble ist jetzt mittig im Fenster ausgerichtet.'],['Fix','Special-Skins: Bei aktivem Skin konnte der Inhalt im Gamble-Reiter und anderen Reitern unsichtbar bleiben, weil eine versteckte Fläche Platz belegte. Behoben.']]},
  {v:'3.0',d:'13.11.2026',t:'Ozzy, Special-Skins, freundlicher Atlas',i:[['Neu','Neue Spielfigur „Ozzy“ nach deinem Bild, mit Laufanimation. Sie lässt sich im Shop freischalten (600 Coins) und ist dann in Survivor und Invaders spielbar. Die Auswahl steht oben im Arcade-Reiter.'],['Neu','Ozzys Atlas hat jetzt ein freundliches Gesicht auf dem Cover und im Spiel: gleiche Figur, aber mit großen freundlichen Augen und einem Lächeln, dazu eine Sprechblase, die dir passend zur Lage etwas sagt (Willkommen, nächstes Grundstück leistbar usw.).'],['Neu','Sechs Special-Skins im Shop, die nicht nur die Farbe ändern: Matrix-Regen (fallender Code, Terminal-Schrift), Retro-Röhre (Scanlines, Flackern, Computerschrift), Neon Dusk (Synthwave-Sonne mit bewegtem Gitterboden und Logo-Glitch), Inferno (aufsteigende Glut, Flammenschrift), Galaxie (Sternenhimmel, Spiralnebel, Sternschnuppen, Milchglas) und Royal Gold (Marmor, wandernder Goldglanz, Funkeln).'],['Info','Skins sind teuer (1.200 bis 3.500 Coins). Im hellen Design und während eines laufenden Arcade-Spiels pausiert der animierte Hintergrund, damit nichts ruckelt.']]},

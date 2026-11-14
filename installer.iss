@@ -49,7 +49,7 @@ Type: filesandordirs; Name: "{app}"
 procedure StopDHub();
 var R: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im D-Hub.exe', '', SW_HIDE, ewWaitUntilTerminated, R);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /t /im D-Hub.exe', '', SW_HIDE, ewWaitUntilTerminated, R);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

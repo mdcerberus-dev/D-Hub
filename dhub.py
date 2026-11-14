@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.3"
+VERSION = "3.4"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -356,6 +356,28 @@ def run_window(url):
         return False
     try:
         import webview
+        guard = os.path.join(HERE, "startguard.txt")
+        try:
+            g = open(guard).read().strip()
+        except Exception:
+            g = ""
+        if g == "started2":
+            WINMODE[0] = "Edge-Fenster (WebView2 blieb zweimal leer, startguard.txt loeschen fuer neuen Versuch)"
+            log(WINMODE[0])
+            return False
+        if g == "started":
+            log("Letzter Fensterstart blieb leer: Edge-Fenster, WebView2-Profil wird geloescht")
+            shutil.rmtree(os.path.join(HERE, "webview-data"), ignore_errors=True)
+            try:
+                open(guard, "w").write("retry")
+            except Exception:
+                pass
+            WINMODE[0] = "Edge-Fenster (letzter Start blieb leer)"
+            return False
+        try:
+            open(guard, "w").write("started2" if g == "retry" else "started")
+        except Exception:
+            pass
         WINMODE[0] = "eigenes Programmfenster (WebView2)"
         FS[0] = bool(store.get("settings", {}).get("fullscreen"))
         win = webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805", fullscreen=FS[0])
@@ -365,12 +387,20 @@ def run_window(url):
         def watch():
             """Bleibt das Fenster schwarz/leer, wird neu geladen. Hilft das nicht, kommt eine Fehlerseite mit Knoepfen."""
             for attempt in range(2):
-                time.sleep(9)
-                try:
-                    ok = win.evaluate_js("!!window.__ok")
-                except Exception:
-                    ok = False
+                ok = False
+                for _ in range(16):
+                    time.sleep(.5)
+                    try:
+                        ok = bool(win.evaluate_js("!!window.__ok"))
+                    except Exception:
+                        ok = False
+                    if ok:
+                        break
                 if ok:
+                    try:
+                        os.remove(guard)
+                    except Exception:
+                        pass
                     return
                 log("Fenster blieb leer, lade neu (Versuch %d)" % (attempt + 1))
                 try:
@@ -2748,8 +2778,9 @@ body.sk-gold .panel,body.sk-gold .card{border-color:rgba(255,210,63,.35)}
 <footer id="status">Bereit</footer>
 <script>
 window.__errs=[];
-function __e(m){__errs.push(m);try{fetch('/api/jslog',{method:'POST',body:JSON.stringify({m:String(m).slice(0,400)})})}catch(x){}}
+function __e(m){__errs.push(m);try{let b=document.getElementById('__eb');if(!b){b=document.createElement('div');b.id='__eb';b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#3a0d0d;color:#ffd0d0;font:13px/1.4 Consolas,monospace;padding:10px 16px;white-space:pre-wrap;max-height:40vh;overflow:auto';document.body.appendChild(b)}b.textContent='D-Hub Fehler (bitte Foto davon schicken):\n'+__errs.slice(-4).join('\n')}catch(x){}try{fetch('/api/jslog',{method:'POST',body:JSON.stringify({m:String(m).slice(0,400)})})}catch(x){}}
 addEventListener('error',e=>__e((e.message||'Fehler')+' @'+(e.lineno||'?')));
+addEventListener('unhandledrejection',e=>__e('Promise: '+(e.reason&&e.reason.message||e.reason)));
 addEventListener('unhandledrejection',e=>__e('Promise: '+((e.reason&&e.reason.message)||e.reason)));
 async function dbg(){const w=document.getElementById('wd');w.style.display='flex';let t='';try{t=await (await fetch('/api/debug')).text()}catch(e){t='Server nicht erreichbar: '+e}document.getElementById('wdp').textContent=t+'\n\nJS-Fehler:\n'+(__errs.join('\n')||'-')}
 setTimeout(()=>{if(!window.__ok)document.getElementById('wd').style.display='flex'},7000);
@@ -3570,6 +3601,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.4',d:'15.11.2026',t:'Start-Reparatur',i:[['Fix','Startwächter: Wenn das D-Hub-Fenster beim Start leer bleibt, startet D-Hub beim nächsten Mal automatisch im Edge-Fenster und löscht dabei das beschädigte WebView2-Profil. Danach wird das eigene Fenster erneut versucht. Klappt es auch dann nicht, bleibt D-Hub dauerhaft im Edge-Fenster.'],['Fix','Fehler beim Laden werden jetzt als roter Kasten im Fenster angezeigt und in dhub.log protokolliert, statt als schwarzer Bildschirm.'],['Fix','Der Installer beendet jetzt auch die zugehörigen WebView2-Prozesse des alten D-Hub, die sonst das Fenster-Profil gesperrt halten konnten.']]},
  {v:'3.3',d:'15.11.2026',t:'Start-Absicherung',i:[['Fix','Bleibt das D-Hub-Fenster nach dem Start schwarz oder leer, öffnet D-Hub jetzt nach etwa 20 Sekunden automatisch ein Edge-Fenster mit derselben Oberfläche als Ersatz, statt nur eine Fehlerseite zu zeigen. Der Vorgang wird in dhub.log protokolliert.']]},
  {v:'3.2',d:'15.11.2026',t:'Männchen-Baukasten',i:[['Neu','Neue Blanko-Figur „Männchen“: das D-Hub-Männchen ohne Kappe, Kopfhörer, Oberteil und Schuhe. Sie ist gratis und lässt sich im Arcade-Reiter oder im Shop als Spielfigur wählen.'],['Neu','Im Shop gibt es jetzt Ausrüstung für das Männchen in fünf Plätzen: Hüte (D-Hub-Kappe, Zauberhut, Goldene Krone), Kopfhörer, Sonnenbrille, Oberteile (D-Hub-Hoodie, Goldrüstung) und Schuhe (Neon-Sneaker, Goldstiefel). Jedes Teil trägst du einzeln und kannst es jederzeit wieder ablegen.'],['Neu','Das Männchen trägt die Ausrüstung in Survivor und Invaders, inklusive Laufanimation der Schuhe. Im Shop siehst du eine Live-Vorschau deiner Figur und bei jedem Teil ein Vorschaubild.'],['Info','Das bisherige Maskottchen mit allem dran bleibt als Spielfigur „D-Hub“ unverändert erhalten. Das ist ein erstes Beispiel, weitere Teile lassen sich nach dem gleichen Muster ergänzen.']]},
  {v:'3.1',d:'13.11.2026',t:'Raketen, echte Sounds, Großbild, 3D-Münze und W20',i:[['Neu','Survivor: Der Raketenwerfer feuert jetzt echte Raketen mit Flamme und Rauchspur. Sie explodieren beim Aufprall oder am Ende der Reichweite mit Feuerball, Druckwelle, Funken und Rauchwolken. Dort bleibt ein kleiner Krater am Boden, der nach einigen Sekunden verblasst. Der Bildschirm wackelt kurz, und beim Abschuss gibt es Mündungsfeuer.'],['Neu','Survivor: Realistischere Waffensounds. Die Pistole knallt mit scharfem Schuss und dumpfem Nachhall, die MP rattert kürzer und variiert, die Schrotflinte donnert und repetiert, der Raketenwerfer zischt mit Startschlag und Düsenrauschen, die Explosion grollt mit Splittergeräuschen. Das Laser-Piu gibt es nur noch in Invaders.'],['Neu','Arcade-Spiele sind jetzt deutlich größer: Beim Spielen wird die Navigationsleiste ausgeblendet und das Spielfeld füllt das Fenster. Die Spielfläche wird zudem schärfer berechnet.'],['Neu','Gamble: Der Münzwurf nutzt eine echte 3D-Münze mit Dicke und Rand. Sie fliegt hoch, dreht sich mehrfach, landet mit Hüpfern und Schatten, dazu Klingeln beim Start und Aufprall.'],['Neu','Gamble: Das Würfeln läuft mit einem 3D-W20 mit 20 Flächen und Zahlen in Gold auf dunklem Violett, mit magischer Aura, kreisenden Runenringen und Funken. Er wird geworfen, hüpft und rollt aus. Das Ergebnis bleibt serverseitig dasselbe, der W20 zeigt den Bereich (jede Zahl = 5 Prozentpunkte).'],['Neu','Gamble ist jetzt mittig im Fenster ausgerichtet.'],['Fix','Special-Skins: Bei aktivem Skin konnte der Inhalt im Gamble-Reiter und anderen Reitern unsichtbar bleiben, weil eine versteckte Fläche Platz belegte. Behoben.']]},
@@ -3826,7 +3858,7 @@ document.addEventListener('keydown',e=>{if(e.key=='Escape'&&pop){pop='';updChrom
 $('#rf').onclick=()=>{toast('Liest neu ein …');api('rescan',{}).then(()=>{render();toast(S.games.length+' Spiele gefunden')})};$('#plus').onclick=()=>openAdd();
 $('#q').oninput=e=>{q=e.target.value.toLowerCase();render()};
 $('#vw').onclick=()=>api('settings',{view:S.settings.view=='cover'?'list':'cover'}).then(render);
-api('state').then(()=>{const st=S.settings.starttab;if(st&&['Alle',...S.launchers,'Downloads','Wert','KumpelFunk'].includes(st))tab=st;render();window.__ok=1;initKF();updChrome(true)});
+api('state').then(()=>{if(S.fatal)throw new Error('Server: '+S.fatal);const st=S.settings.starttab;if(st&&['Alle',...S.launchers,'Downloads','Wert','KumpelFunk'].includes(st))tab=st;render();window.__ok=1;initKF();updChrome(true)});
 setInterval(async()=>{const a=document.activeElement,typing=a&&a.tagName=='INPUT',old=S.pending,ob=S.busy;try{await api('state');fails=0}catch(e){if(++fails>=3)$('#lost').style.display='flex';return}status();updChrome();applyCoins();
  if(!typing&&((ob&&!S.busy)||(tab=='Einstellungen'&&stab=='Updates'&&updSig()!=lastUpd)||tab=='Downloads'||(tab=='Wert'&&(S.pending||old))))render()},1000);
 </script></body></html>
@@ -3868,7 +3900,13 @@ class H(BaseHTTPRequestHandler):
                 self.send_error(404)
             return
         if base == "/api/state":
-            self.send(state())
+            try:
+                self.send(state())
+            except Exception:
+                import traceback
+                tb = traceback.format_exc()
+                log("state() Fehler: " + tb[-600:])
+                self.send(json.dumps({"fatal": tb[-500:]}).encode("utf-8"), "application/json")
         elif base == "/api/debug":
             self.send(debug_info().encode("utf-8"), "text/plain")
         else:

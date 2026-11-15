@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.16"
+VERSION = "3.17"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -359,6 +359,85 @@ def local_dir():
         return HERE
 
 
+WVLOG = []
+
+
+def wv_logging():
+    """Meldungen der Fenster-Komponente (pywebview) landen in dhub.log. Ohne das bleibt ein WebView2-Startfehler unsichtbar und das Fenster einfach schwarz."""
+    import logging
+
+    class Hd(logging.Handler):
+        def emit(self, rec):
+            try:
+                m = rec.getMessage()
+                if rec.exc_info and rec.exc_info[1] is not None:
+                    m += " | %s" % rec.exc_info[1]
+                if rec.levelno >= logging.WARNING:
+                    WVLOG.append(m[:500])
+                    del WVLOG[:-6]
+                log("pywebview: " + m[:700])
+            except Exception:
+                pass
+    lg = logging.getLogger("pywebview")
+    lg.setLevel(logging.INFO)
+    lg.addHandler(Hd())
+
+
+def wv_prepare(webview):
+    """Haeufigste Ursache fuer ein schwarzes Fenster in der gebauten EXE: Microsoft.Web.WebView2.Core.dll findet die
+    WebView2Loader.dll nicht (sie liegt in einem Unterordner). Wir legen sie daneben und machen den Ordner bekannt."""
+    import struct
+    import platform
+    try:
+        lib = os.path.join(os.path.dirname(os.path.abspath(webview.__file__)), "lib")
+        arm = "arm" in platform.machine().lower()
+        arch = "arm64" if arm else ("x64" if struct.calcsize("P") == 8 else "x86")
+        roots = [lib, getattr(sys, "_MEIPASS", "") or lib]
+        found = []
+        for root in roots:
+            for dp, dn, fn in os.walk(root):
+                if "WebView2Loader.dll" in fn:
+                    found.append(os.path.join(dp, "WebView2Loader.dll"))
+        want = [p for p in found if arch in p.replace("\\", "/").lower().replace("win-", "").split("/")]
+        src = (want or [p for p in found if arch in p.lower()] or [None])[0]
+        log("WebView2Loader (%s): %s | gefunden: %s" % (arch, src or "FEHLT", "; ".join(found) or "-"))
+        if not src:
+            return
+        for dst in (os.path.join(lib, "WebView2Loader.dll"), os.path.join(getattr(sys, "_MEIPASS", lib), "WebView2Loader.dll")):
+            try:
+                if os.path.abspath(dst) != os.path.abspath(src) and not os.path.exists(dst):
+                    shutil.copyfile(src, dst)
+            except Exception as e:
+                log("WebView2Loader kopieren: %s" % e)
+        d = os.path.dirname(src)
+        os.environ["PATH"] = lib + os.pathsep + d + os.pathsep + os.environ.get("PATH", "")
+        for x in (lib, d):
+            try:
+                os.add_dll_directory(x)
+            except Exception:
+                pass
+    except Exception as e:
+        log("wv_prepare: %s: %s" % (type(e).__name__, e))
+
+
+def wv_runtime():
+    try:
+        import winreg
+        for hive, key in ((winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+                          (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"),
+                          (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}")):
+            try:
+                with winreg.OpenKey(hive, key) as k:
+                    v = winreg.QueryValueEx(k, "pv")[0]
+                    if v and v != "0.0.0.0":
+                        return v
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return ""
+
+
 def relaunch_nogpu():
     """Fenster blieb leer: einmal ohne GPU-Beschleunigung neu starten (haeufigste Ursache fuer ein schwarzes WebView2-Fenster)."""
     try:
@@ -394,6 +473,10 @@ def run_window(url):
             import importlib
             importlib.invalidate_caches()
             import webview
+        wv_logging()
+        wv_prepare(webview)
+        rt = wv_runtime()
+        log("pywebview %s, WebView2 Runtime %s" % (getattr(webview, "__version__", "?"), rt or "NICHT GEFUNDEN"))
         guard = os.path.join(HERE, "startguard.txt")
         try:
             g = open(guard).read().strip()
@@ -414,6 +497,7 @@ def run_window(url):
         data = os.path.join(local_dir(), "webview-data")
         if os.path.exists(os.path.join(local_dir(), "nogpu.flag")) or os.environ.get("DHUB_NOGPU"):
             NOGPU[0] = True
+            data = os.path.join(local_dir(), "webview-data-nogpu")  # eigenes Profil: gleiche Ordner mit anderen Startoptionen lassen WebView2 scheitern
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--disable-gpu --disable-gpu-compositing"
         try:
             win.events.loaded += lambda: log("Seite im Fenster geladen")
@@ -449,7 +533,8 @@ def run_window(url):
             def ask_browser():
                 try:
                     import ctypes
-                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft.\n\nDie Datei dhub.log neben der D-Hub.exe (oder unter %LOCALAPPDATA%\\D-Hub) enthält den Grund.\n\nZur Not im Browser öffnen?", "D-Hub", 0x24)
+                    why = "\n".join(WVLOG[-3:]) or ("Die WebView2 Runtime von Microsoft wurde nicht gefunden." if not rt else "Die Fenster-Komponente meldet keinen Fehler (WebView2 Runtime %s)." % rt)
+                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft.\n\nGrund:\n" + why[:900] + "\n\n(Bitte ein Foto dieser Meldung schicken. Details stehen in dhub.log neben der D-Hub.exe.)\n\nZur Not im Browser öffnen?", "D-Hub", 0x24)
                     if r == 6:
                         open_window(url)
                 except Exception as e:
@@ -4386,6 +4471,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.17',d:'15.11.2026',t:'Schwarzes Fenster: Ursache behoben und sichtbar gemacht',i:[['Fix','In der gebauten D-Hub.exe konnte die Fenster-Komponente ihre Hilfsdatei WebView2Loader.dll nicht finden, dann blieb das Fenster ohne Fehlermeldung schwarz. D-Hub legt die Datei jetzt beim Start an die richtige Stelle.'],['Fix','Fehler der Fenster-Komponente stehen jetzt in dhub.log. Bleibt das Fenster trotzdem leer, zeigt D-Hub den genauen Grund direkt in einer Meldung an.'],['Fix','Der Neustart ohne GPU-Beschleunigung nutzt ein eigenes Fenster-Profil, damit er nicht am alten Profil scheitert.']]},
  {v:'3.16',d:'15.11.2026',t:'Schwarzes Programmfenster repariert',i:[['Fix','Blieb das D-Hub-Fenster schwarz, startet D-Hub jetzt automatisch einmal ohne GPU-Beschleunigung neu (häufigste Ursache auf manchen Grafiktreibern) und merkt sich das. Hilft auch das nicht, fragt D-Hub, ob es ausnahmsweise im Browser geöffnet werden soll, statt ein leeres Fenster zu lassen.'],['Fix','Das Fenster-Profil liegt jetzt unter %LOCALAPPDATA%\\D-Hub statt im Programmordner, damit es auch bei Installation in geschützten Ordnern angelegt werden kann. In dhub.log steht, wie das Fenster gestartet wurde.']]},
  {v:'3.15',d:'15.11.2026',t:'Casino, Chips-Tasche und viele Fixes',i:[['Neu','Der Gamble-Reiter heißt jetzt Casino und ist eine Lobby aus der Draufsicht: Teppichboden, Holz und Gold, mit Poker-Tisch, Roulette, Münzwurf-Tisch, Slot-Automaten und der Kasse. Klick auf einen Tisch, und dein Männchen läuft dorthin.'],['Neu','Chips-Tasche: Deine Chips gelten an allen Tischen (Poker, Roulette, Münzwurf, Slots). An der Kasse tauschst du D-Hub Dollar 1:1 in Chips und zurück, nur in 5er-, 10er-, 50er- und 100er-Chips. D-Hub Dollar lassen sich weiterhin nicht kaufen und haben keinen Geldwert.'],['Neu','Poker: Einstieg schon ab 5 Chips, edlerer Tisch mit Holzrand, strukturiertem Filz und neuen Karten. Aufgedeckte Gegnerkarten liegen jetzt auf dem Tisch vor den Spielern und drehen sich beim Showdown um, mit Name der Hand.'],['Neu','Invaders: Power-ups stapeln sich ohne Limit. Jedes Schnellfeuer macht schneller, jeder Dreifachschuss fächert mehr Schüsse auf (3, 5, 7, ...), jeder Schild fängt einen Treffer ab, und Leben sind unbegrenzt.'],['Fix','D-Hub startet nie mehr als Browser-Fenster: Es öffnet immer das eigene Programmfenster. Hängt der Start einmal, wird das Fenster-Profil zurückgesetzt und es wird erneut das Programmfenster geöffnet. Fehlt die WebView2-Komponente, erscheint eine Meldung statt eines Browsers.']]},
  {v:'3.14',d:'15.11.2026',t:'Lounge-Musik am Poker-Tisch',i:[['Neu','Am Poker-Tisch läuft jetzt ruhige Lounge-Jazz-Musik (Kontrabass, weiche Akkorde, leichter Besen-Rhythmus und gelegentliche Vibraphon-Töne). Sie endet, sobald du den Poker-Reiter verlässt, und lässt sich mit dem Lautsprecher-Knopf stummschalten.']]},

@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.9"
+VERSION = "3.10"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -2302,7 +2302,7 @@ def update_loop():
             check_update(first=first)
             fetch_news()
             first = False
-        time.sleep(3600)
+        time.sleep(300)
 
 
 def uninstaller():
@@ -3099,7 +3099,8 @@ function shopView(){
  <div class="panel"><div class="row"><div style="flex:1"><span style="font-size:26px;font-weight:800">🪙 ${c.balance}</span><div class="dim">Serie: ${c.streak} Tage · Insgesamt verdient: ${c.total}</div></div>
   ${c.daily_ready?`<button class="btn pri" onclick="coinOp('daily')">Täglicher Bonus: +${c.daily_amount}</button>`:'<i class="b mute">Heute abgeholt, morgen wieder</i>'}</div>
   <div class="row"><div style="flex:1"><b>Spielzeit heute</b><div class="dim">Alle 10 Minuten Spielen: +2 Coins, höchstens ${c.play_cap} pro Tag.</div></div><div style="width:160px"><div class="bar"><i style="width:${100*c.play_today/c.play_cap}%"></i></div><div class="dim" style="text-align:right">${c.play_today} / ${c.play_cap}</div></div></div></div>
- ${sec('skin','Special-Skins')}${sec('theme','Farbthemen')}${sec('hover','Hover-Effekte für Spiele')}${sec('title','Titel')}${sec('char','Spielfiguren (Arcade)')}${chShop(c)}${sec('hair','Frisuren')}${sec('hat','Mützen und Hüte')}${sec('ear','Kopfhörer')}${sec('face','Gesichter')}${sec('shirt','Oberteile')}${sec('feet','Schuhe')}${sec('weapon','Survivor-Waffen (Easter Eggs)')}
+ <div style="display:flex;gap:6px;margin:18px 0 0;flex-wrap:wrap">${[['char','Charakter-Shop'],['design','D-Hub-Design-Shop']].map(([k,l])=>`<button class="btn ${k==shopTab?'pri':''}" onclick="shopTab='${k}';render()">${l}</button>`).join('')}</div>
+ ${shopTab=='design'?`<div class="sub" style="margin-top:10px">Das Aussehen von D-Hub: Skins, Farbthemen, Hover-Effekte und Titel.</div>${sec('skin','Special-Skins')}${sec('theme','Farbthemen')}${sec('hover','Hover-Effekte für Spiele')}${sec('title','Titel')}`:`<div class="sub" style="margin-top:10px">Deine Spielfiguren mit Frisuren, Kleidung und Ausrüstung für Survivor und Invaders.</div>${sec('char','Spielfiguren (Arcade)')}${chShop(c)}${sec('hair','Frisuren')}${sec('hat','Mützen und Hüte')}${sec('ear','Kopfhörer')}${sec('face','Gesichter')}${sec('shirt','Oberteile')}${sec('feet','Schuhe')}${sec('weapon','Survivor-Waffen (Easter Eggs)')}`}
  <h3 style="margin:24px 0 10px">Meilensteine (${done}/${c.milestones.length})</h3><div class="shop">${c.milestones.map(m=>`<div class="item" style="opacity:${m.done?.55:1}"><span style="font-size:18px">${m.done?'✅':'⬜'}</span><div style="flex:1">${esc(m.label)}</div><b>🪙 ${m.reward}</b></div>`).join('')}</div>`}
 /* ===== SPECIAL-SKINS (animierte Hintergründe und Effekte) ===== */
 let skRaf=0,skName='',skC=null,skX=null,skSt=null,skW=0,skH=0,skLast=0,skAcc=0;
@@ -3783,6 +3784,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.10',d:'15.11.2026',t:'Zwei Shops, Roulette-Zahlen, Update-Anzeige',i:[['Neu','Der Shop ist jetzt in zwei Reiter geteilt: Der Charakter-Shop enthält Spielfiguren, Männchen-Vorschau, Frisuren, Mützen, Kopfhörer, Gesichter, Oberteile, Schuhe und die Survivor-Waffen. Der D-Hub-Design-Shop enthält Special-Skins, Farbthemen, Hover-Effekte und Titel.'],['Neu','Roulette: Die Zahlen in den Fächern sind jetzt goldene Ziffern mit Schatten, die Brüche als ½ und 1½ darstellen, statt fetter Weiß-Schwarz-Schrift mit ×.'],['Fix','Neue Updates erscheinen jetzt, ohne dass D-Hub geschlossen werden muss: D-Hub prüft alle 5 Minuten auf GitHub (vorher stündlich), zusätzlich sofort, sobald du zum D-Hub-Fenster zurückkehrst. Der Update-Knopf neben der Versionsnummer erscheint dann von selbst.']]},
  {v:'3.9',d:'15.11.2026',t:'Echtes 3D-Roulette und saubere Laufanimation',i:[['Neu','Gamble: Das Glücksrad ist jetzt ein dreidimensionales Roulette mit Holzkessel, goldenem Rand, Kugelbahn mit Deflektoren, drehendem Fächerkranz, Kegel und goldenem Turm. Die Kugel läuft gegen die Drehrichtung auf der Bahn, rutscht nach innen, springt über die Stege und bleibt im Gewinnfach liegen, begleitet von Klick-Geräuschen. Auszahlung und Wahrscheinlichkeiten sind unverändert (12 Fächer, ×0 bis ×4).'],['Fix','Laufanimation in Survivor und Invaders überarbeitet: Die Beine heben sich im Wechsel statt zu schwenken, der Körper wippt bei jedem Schritt, wiegt leicht hin und her und federt. Beim Losgehen und Stehenbleiben wird weich überblendet, und der Schatten bewegt sich mit.']]},
  {v:'3.8',d:'15.11.2026',t:'Deinstallieren repariert',i:[['Fix','„D-Hub deinstallieren“ in den Einstellungen löscht D-Hub jetzt wirklich: Der Deinstaller läuft getrennt von D-Hub, beendet D-Hub samt Fensterprozessen, entfernt Verknüpfungen und Autostart und löscht danach auch übrig gebliebene Dateien im Ordner. Vorher beendete D-Hub den eigenen Deinstaller mit.'],['Info','Beim Deinstallieren verschwinden auch Coin-Stand und Einstellungen (hub_data.json). Deine Spiele bleiben unberührt.']]},
  {v:'3.7',d:'15.11.2026',t:'Deine Figuren: weiblich und männlich',i:[['Neu','Das Männchen ist jetzt deine gezeichnete Figur, einmal weiblich (mit Wimpern, Hände in den Hüften) und einmal männlich, mit dem grünen Neon-Umriss, grauem Oberteil, blauer Shorts und dunklen Schuhen. Beide sind kostenlos und in der Arcade und im Shop wählbar.'],['Neu','Die komplette Garderobe passt auf beide Figuren: Frisuren, Mützen, Kopfhörer, Gesichter, Oberteile und Schuhe. Wer kein Teil trägt, sieht genau deine Originalfigur. Ein neues Gesicht ersetzt Augen, Brauen und Mund, bei der weiblichen Figur mit Wimpern.'],['Neu','Im Shop zeigen die Vorschaubilder jetzt nur das jeweilige Teil an der aktiven Figur (Kopf, Oberkörper oder Füße), und oben siehst du beide Figuren nebeneinander.'],['Fix','Die Beine gehen sauber in den Körper über und schwingen beim Laufen in Survivor und Invaders.']]},
@@ -3860,7 +3862,7 @@ function ivBG(){if(ivBGc)return ivBGc;const cv=document.createElement('canvas');
   c.fillStyle='#1b1d2a';c.fillRect(x-2,hy,4,110);c.fillRect(x-2,hy,26,4);c.fillStyle='#ffe2a0';c.shadowColor='#ffcf6a';c.shadowBlur=24;c.beginPath();c.ellipse(hx,hy+6,9,4,0,0,6.3);c.fill();c.shadowBlur=0}
  return ivBGc=cv}
 
-let gm='flip',gbet=10,gbusy=false,dmode='under',dtarget=50,wrot=0,coinRot=0;
+let shopTab='char',gm='flip',gbet=10,gbusy=false,dmode='under',dtarget=50,wrot=0,coinRot=0;
 function coinEdge(){let h='';for(let z=-7;z<=7;z+=1)h+=`<i class="ce" style="transform:translateZ(${z}px)"></i>`;return h}
 const D20={faces:null};
 function d20Build(){if(D20.faces)return D20.faces;const T=(1+Math.sqrt(5))/2,V=[[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],[T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]],
@@ -3906,8 +3908,11 @@ function wDraw(cv,ph,ball,hl,now){const c=cv.getContext('2d'),dpr=cv.width/560,c
    if(hl==i){c.fillStyle='rgba(255,255,255,'+(.28+.22*Math.sin(now/1000*9))+')';c.fill()}}
   c.strokeStyle='#e3bd55';c.lineWidth=2.6;for(let i=0;i<12;i++){const a=(ph+i*30-90)*rad;c.beginPath();c.moveTo(Math.cos(a)*R*.46,Math.sin(a)*R*.46);c.lineTo(Math.cos(a)*R*.70,Math.sin(a)*R*.70);c.stroke()}
   c.lineWidth=3.2;c.beginPath();c.arc(0,0,R*.70,0,6.3);c.stroke();c.beginPath();c.arc(0,0,R*.46,0,6.3);c.stroke()});
- c.font='800 17px Inter,Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';c.lineWidth=3.4;c.strokeStyle='rgba(0,0,0,.8)';
- for(let i=0;i<12;i++){const a=(ph+i*30+15-90)*rad,x=cx+Math.cos(a)*R*.585,y=cy+Math.sin(a)*R*.585*K,t='×'+WMULT[i];c.strokeText(t,x,y);c.fillStyle='#fff';c.fillText(t,x,y)}
+ c.textAlign='center';c.textBaseline='middle';
+ for(let i=0;i<12;i++){const m=WMULT[i],a=(ph+i*30+15-90)*rad,x=cx+Math.cos(a)*R*.585,y=cy+Math.sin(a)*R*.585*K,fs=21+4*Math.sin(a),t=m==.5?'½':m==1.5?'1½':String(m);
+  c.font='700 '+fs+'px Georgia,"Times New Roman",serif';c.save();c.shadowColor=m==4?'rgba(255,240,170,.8)':'rgba(0,0,0,.85)';c.shadowBlur=m==4?2:5;c.shadowOffsetY=m==4?1:2;
+  const g=c.createLinearGradient(0,y-fs*.5,0,y+fs*.5);if(m==4){g.addColorStop(0,'#5a3a00');g.addColorStop(1,'#2a1800')}else{g.addColorStop(0,'#fff6d2');g.addColorStop(.55,'#f1cf6a');g.addColorStop(1,'#c78f1e')}
+  c.fillStyle=g;c.fillText(t,x,y);c.restore()}
  P(()=>{const g=c.createRadialGradient(-R*.08,-R*.1,R*.05,0,0,R*.46);g.addColorStop(0,'#d09040');g.addColorStop(.5,'#7a3f1a');g.addColorStop(1,'#2e1508');c.fillStyle=g;c.beginPath();c.arc(0,0,R*.455,0,6.3);c.fill();
   for(let i=0;i<8;i++){const a=(ph+i*45)*rad;c.strokeStyle='rgba(236,196,96,.75)';c.lineWidth=2.2;c.beginPath();c.moveTo(Math.cos(a)*R*.27,Math.sin(a)*R*.27);c.lineTo(Math.cos(a)*R*.44,Math.sin(a)*R*.44);c.stroke()}
   c.strokeStyle='rgba(255,230,160,.35)';c.lineWidth=2;c.beginPath();c.arc(0,0,R*.36,0,6.3);c.stroke()});
@@ -4087,6 +4092,7 @@ $('#rf').onclick=()=>{toast('Liest neu ein …');api('rescan',{}).then(()=>{rend
 $('#q').oninput=e=>{q=e.target.value.toLowerCase();render()};
 $('#vw').onclick=()=>api('settings',{view:S.settings.view=='cover'?'list':'cover'}).then(render);
 api('state').then(()=>{if(S.fatal)throw new Error('Server: '+S.fatal);const st=S.settings.starttab;if(st&&['Alle',...S.launchers,'Downloads','Wert','KumpelFunk'].includes(st))tab=st;render();window.__ok=1;initKF();updChrome(true)});
+let lastChk=0;const quietChk=()=>{if(Date.now()-lastChk<90000||(S.settings&&S.settings.autoupdate===false))return;lastChk=Date.now();api('action',{name:'checkupdate'}).catch(()=>{})};addEventListener('focus',quietChk);document.addEventListener('visibilitychange',()=>{if(!document.hidden)quietChk()});setInterval(quietChk,300000);
 setInterval(async()=>{const a=document.activeElement,typing=a&&a.tagName=='INPUT',old=S.pending,ob=S.busy;try{await api('state');fails=0}catch(e){if(++fails>=3)$('#lost').style.display='flex';return}status();updChrome();applyCoins();
  if(!typing&&((ob&&!S.busy)||(tab=='Einstellungen'&&stab=='Updates'&&updSig()!=lastUpd)||tab=='Downloads'||(tab=='Wert'&&(S.pending||old))))render()},1000);
 </script></body></html>

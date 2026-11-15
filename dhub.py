@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.8"
+VERSION = "3.9"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -2556,6 +2556,7 @@ PAGE = r'''<!DOCTYPE html>
 .coinwrap{perspective:600px;height:130px;display:flex;align-items:center;justify-content:center}.cn{width:100px;height:100px;position:relative;transform-style:preserve-3d}
 .cf{position:absolute;inset:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:1px;background:radial-gradient(circle at 35% 30%,#ffe27a,#d9a400);color:#4a3300;border:4px solid #b88700;backface-visibility:hidden}.cf.cb{transform:rotateY(180deg)}
 .wheelwrap{position:relative;width:230px;height:230px;margin:10px auto}.wh{position:relative;width:230px;height:230px;border-radius:50%;border:4px solid var(--line)}.wh span{position:absolute;left:50%;top:50%;margin:-9px 0 0 -18px;width:36px;text-align:center;font-weight:700;font-size:13px;color:#fff;text-shadow:0 1px 2px #000;transform-origin:center}
+.whc{width:min(560px,100%);height:auto;display:block;margin:0 auto}.wleg{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:2px 0 8px;font-size:12px;opacity:.8}.wleg i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
 .ptr{position:absolute;left:50%;top:-8px;margin-left:-10px;border:10px solid transparent;border-top:18px solid var(--ac);z-index:2}
 .slot{width:min(470px,100%);margin:8px auto 14px;padding:14px 18px 12px;border-radius:28px;background:linear-gradient(160deg,#611325,#2b0610 55%,#4d0e1b);box-shadow:0 0 0 3px #e3bd55,0 0 0 6px #7a5a14,0 0 0 8px #2a1a04,0 20px 50px rgba(0,0,0,.65),inset 0 0 50px rgba(0,0,0,.55);position:relative}
 .slotlights{display:flex;justify-content:space-between;padding:2px 6px}.slotlights i{width:10px;height:10px;border-radius:50%;background:#ffe9a0;box-shadow:0 0 8px 2px rgba(255,214,90,.8);animation:bulb 1s infinite}.slotlights i:nth-child(even){animation-delay:.5s}.slotlights.bot{margin-top:12px}
@@ -3579,14 +3580,16 @@ function arBG(){if(arBGc)return arBGc;const cv=document.createElement('canvas');
  const v=c.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,W*.62);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.45)');c.fillStyle=v;c.fillRect(AX0,AY0,AX1-AX0,AY1-AY0);
  c.lineWidth=16;c.strokeStyle='#2a2017';c.strokeRect(AX0-8,AY0-8,AX1-AX0+16,AY1-AY0+16);c.lineWidth=3;c.strokeStyle='#6b5338';c.strokeRect(AX0,AY0,AX1-AX0,AY1-AY0);
  return arBGc=cv}
-function arPlayer(c,g,t){const p=g.p,ph=p.walk,mv=p.mv,bs=mv?Math.abs(Math.sin(ph))*3:Math.sin(t*2.2)*1.2,SC=ASC*ARSC,bw=ARI.body.naturalWidth*SC,bh=ARI.body.naturalHeight*SC;const lh=ARI.ll.naturalHeight*SC;
+let ARWB=0;
+function arPlayer(c,g,t){const p=g.p,ph=p.walk,mv=p.mv;ARWB+=((mv?1:0)-ARWB)*.28;const wb=ARWB,s0=Math.sin(ph),SC=ASC*ARSC,bw=ARI.body.naturalWidth*SC,bh=ARI.body.naturalHeight*SC,lh=ARI.ll.naturalHeight*SC;
  if(!bw)return;
- c.save();c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(p.x,p.y+2,38,9,0,0,6.3);c.fill();c.restore();
+ const bs=wb*Math.abs(s0)*3.2+(1-wb)*Math.sin(t*2.2)*1.1,sway=s0*1.8*wb;
+ c.save();c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(p.x+sway*.6,p.y+2,38-wb*Math.abs(s0)*3,9-wb*Math.abs(s0)*1.2,0,0,6.3);c.fill();c.restore();
  c.save();if(p.inv>0&&Math.floor(t*20)%2)c.globalAlpha=.45;
  const top=p.y-lh+2-bh-bs+ARLOV*SC;
- const leg=(img,ox,k)=>{const lw=img.naturalWidth*SC,lh=img.naturalHeight*SC,s=mv?Math.sin(ph+k*Math.PI):0,lift=mv?Math.max(0,s)*7:0,sw=mv?s*ARSW:0;c.save();c.translate(p.x+ox+lw/2,p.y-lh+2-lift);c.rotate(sw);c.drawImage(img,-lw/2,0,lw,lh);c.restore()};
+ const leg=(img,ox,k)=>{const lw=img.naturalWidth*SC,lg=img.naturalHeight*SC,s=Math.sin(ph+k*Math.PI)*wb,up=Math.max(0,s);c.save();c.translate(p.x+ox+lw/2+s*1.6,p.y-lg+2-up*6.5);c.rotate(s*ARSW*.45);c.scale(1,1-up*.07);c.drawImage(img,-lw/2,0,lw,lg);c.restore()};
  leg(ARI.ll,ARLX[0]*SC-bw/2,0);leg(ARI.rl,ARLX[1]*SC-bw/2,1);
- c.save();c.translate(p.x,top+bh);c.rotate(mv?Math.sin(ph)*.045:0);c.drawImage(ARI.body,-bw/2,-bh,bw,bh);c.restore();
+ const sq=1-.022*Math.cos(2*ph)*wb;c.save();c.translate(p.x+sway,top+bh);c.rotate(s0*.05*wb);c.scale(1/sq,sq);c.drawImage(ARI.body,-bw/2,-bh,bw,bh);c.restore();
  c.restore()}
 function arEnemy(c,e,t){const w=e.w,h=e.h;c.save();c.translate(e.x,e.y);c.rotate(Math.sin(t*9+e.ph)*.12);
  c.save();arRR(c,-w/2,-h/2,w,h,6);c.clip();const im=e.im;
@@ -3715,11 +3718,11 @@ function ivDraw(t){const c=ivCtx,g=IV;if(!c||!g)return;c.setTransform(CVK,0,0,CV
  for(const k of g.caps){const m=IVCAP[k.t];c.save();c.translate(k.x,k.y);c.shadowColor=m.c;c.shadowBlur=14;c.fillStyle=m.c;arRR(c,-14,-11,28,22,8);c.fill();c.shadowBlur=0;c.strokeStyle='#fff';c.lineWidth=2;c.stroke();c.fillStyle='#10131a';c.font='bold 15px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(m.l,0,1);c.restore()}
  const S2=.3*ARSC,bw=ARI.body.naturalWidth*S2,bh=ARI.body.naturalHeight*S2;
  if(bw){c.save();if(g.inv>0&&Math.floor(t*20)%2)c.globalAlpha=.4;const fy=548,mv=arK.KeyA||arK.KeyD||arK.ArrowLeft||arK.ArrowRight;
-  const ll=ARI.ll,rl=ARI.rl,lh=ll.naturalHeight*S2,bob=mv?Math.abs(Math.sin(g.walk))*2:0;
-  const leg=(im,ox,k)=>{const s=mv?Math.sin(g.walk+k*Math.PI):0;c.save();c.translate(g.px+ox+im.naturalWidth*S2/2,fy-lh+1-(mv?Math.max(0,s)*4:0));c.rotate(s*ARSW);c.drawImage(im,-im.naturalWidth*S2/2,0,im.naturalWidth*S2,im.naturalHeight*S2);c.restore()};
+  ARWB+=((mv?1:0)-ARWB)*.28;const wb=ARWB,w0=Math.sin(g.walk),ll=ARI.ll,rl=ARI.rl,lh=ll.naturalHeight*S2,bob=wb*Math.abs(w0)*2.2,sway=w0*1.2*wb;
+  const leg=(im,ox,k)=>{const lw=im.naturalWidth*S2,lg=im.naturalHeight*S2,s=Math.sin(g.walk+k*Math.PI)*wb,up=Math.max(0,s);c.save();c.translate(g.px+ox+lw/2+s*1.1,fy-lg+1-up*4.2);c.rotate(s*ARSW*.45);c.scale(1,1-up*.07);c.drawImage(im,-lw/2,0,lw,lg);c.restore()};
   leg(ll,ARLX[0]*S2-bw/2,0);leg(rl,ARLX[1]*S2-bw/2,1);
-  c.drawImage(ARI.body,g.px-bw/2,fy-lh+1-bh-bob+ARLOV*S2,bw,bh);
-  c.fillStyle='#8a939c';c.fillRect(g.px-4,fy-lh-bh-bob-14+ARTOP*S2,8,16);c.fillStyle=g.buff.auto>0?'#ff9a3a':'#7CFC9a';c.fillRect(g.px-4,fy-lh-bh-bob-14+ARTOP*S2,8,4);
+  {const sq=1-.022*Math.cos(2*g.walk)*wb;c.save();c.translate(g.px+sway,fy-lh+1-bob+ARLOV*S2);c.rotate(w0*.05*wb);c.scale(1/sq,sq);c.drawImage(ARI.body,-bw/2,-bh,bw,bh);c.restore()}
+  c.fillStyle='#8a939c';c.fillRect(g.px-4+sway,fy-lh-bh-bob-14+ARTOP*S2,8,16);c.fillStyle=g.buff.auto>0?'#ff9a3a':'#7CFC9a';c.fillRect(g.px-4+sway,fy-lh-bh-bob-14+ARTOP*S2,8,4);
   if(g.shield){c.globalAlpha=.55+.25*Math.sin(t*8);c.strokeStyle='#7CFC9a';c.shadowColor='#7CFC9a';c.shadowBlur=14;c.lineWidth=3;c.beginPath();c.arc(g.px,fy-lh-bh/2,44,0,6.3);c.stroke()}c.restore()}
  c.fillStyle='#7CFC9a';for(const b of g.bul){c.save();c.translate(b.x,b.y);c.rotate(Math.atan2(b.vx,-b.vy));c.shadowColor='#7CFC9a';c.shadowBlur=8;c.fillRect(-2,-9,4,16);c.restore()}
  for(const b of g.eb){c.fillStyle=b.hot?'#ff4fd8':'#ff5a4a';c.shadowColor=c.fillStyle;c.shadowBlur=10;c.beginPath();c.arc(b.x,b.y,b.hot?6:5,0,6.3);c.fill();c.shadowBlur=0}
@@ -3780,6 +3783,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.9',d:'15.11.2026',t:'Echtes 3D-Roulette und saubere Laufanimation',i:[['Neu','Gamble: Das Glücksrad ist jetzt ein dreidimensionales Roulette mit Holzkessel, goldenem Rand, Kugelbahn mit Deflektoren, drehendem Fächerkranz, Kegel und goldenem Turm. Die Kugel läuft gegen die Drehrichtung auf der Bahn, rutscht nach innen, springt über die Stege und bleibt im Gewinnfach liegen, begleitet von Klick-Geräuschen. Auszahlung und Wahrscheinlichkeiten sind unverändert (12 Fächer, ×0 bis ×4).'],['Fix','Laufanimation in Survivor und Invaders überarbeitet: Die Beine heben sich im Wechsel statt zu schwenken, der Körper wippt bei jedem Schritt, wiegt leicht hin und her und federt. Beim Losgehen und Stehenbleiben wird weich überblendet, und der Schatten bewegt sich mit.']]},
  {v:'3.8',d:'15.11.2026',t:'Deinstallieren repariert',i:[['Fix','„D-Hub deinstallieren“ in den Einstellungen löscht D-Hub jetzt wirklich: Der Deinstaller läuft getrennt von D-Hub, beendet D-Hub samt Fensterprozessen, entfernt Verknüpfungen und Autostart und löscht danach auch übrig gebliebene Dateien im Ordner. Vorher beendete D-Hub den eigenen Deinstaller mit.'],['Info','Beim Deinstallieren verschwinden auch Coin-Stand und Einstellungen (hub_data.json). Deine Spiele bleiben unberührt.']]},
  {v:'3.7',d:'15.11.2026',t:'Deine Figuren: weiblich und männlich',i:[['Neu','Das Männchen ist jetzt deine gezeichnete Figur, einmal weiblich (mit Wimpern, Hände in den Hüften) und einmal männlich, mit dem grünen Neon-Umriss, grauem Oberteil, blauer Shorts und dunklen Schuhen. Beide sind kostenlos und in der Arcade und im Shop wählbar.'],['Neu','Die komplette Garderobe passt auf beide Figuren: Frisuren, Mützen, Kopfhörer, Gesichter, Oberteile und Schuhe. Wer kein Teil trägt, sieht genau deine Originalfigur. Ein neues Gesicht ersetzt Augen, Brauen und Mund, bei der weiblichen Figur mit Wimpern.'],['Neu','Im Shop zeigen die Vorschaubilder jetzt nur das jeweilige Teil an der aktiven Figur (Kopf, Oberkörper oder Füße), und oben siehst du beide Figuren nebeneinander.'],['Fix','Die Beine gehen sauber in den Körper über und schwingen beim Laufen in Survivor und Invaders.']]},
  {v:'3.6',d:'15.11.2026',t:'Männchen-Umbau, Garderobe, Easter-Egg-Waffen',i:[['Fix','Das Männchen steht jetzt ganz normal: Kopf, Oberkörper, Arme und zwei echte Beine mit Füßen. Beim Laufen schwingen die Beine. Die Füße gehen nicht mehr in den Körper über.'],['Neu','Viel mehr Auswahl im Shop: 6 Frisuren, 9 Mützen und Hüte (Kappe, Strickmütze, Weihnachtsmütze, Fischerhut, Klempner-Kappe, Cowboyhut, Zylinder, Zauberhut, Wikingerhelm, Krone), 5 Kopfhörer (Ohrenwärmer, Neon, Gaming-Headset, Katzenohren, DJ), 9 Gesichter (fröhlich, grimmig, zwinkernd, Nerd-Brille, Schnurrbart, Augenklappe, Sonnenbrille, Katze, Roboter), 7 Oberteile (T-Shirt, Hawaiihemd, Klempner-Overall, Hoodie, Anzug, Ritter- und Goldrüstung) und 5 Schuhe (Retro-Turnschuhe, Gummistiefel, Sneaker, Lederstiefel, Goldstiefel). Alles lässt sich frei kombinieren.'],['Neu','Sieben freischaltbare Survivor-Waffen als Easter Eggs, im Shop kaufbar: Bumerang (kommt zurück), Feuerblume (springende Feuerbälle), Schwerkraft-Kanone (schleudert Gegner weg), Portal-Pistole (versetzt Gegner ans andere Ende der Arena), Energiewelle (durchschlägt mehrere), Laserklinge (leuchtendes Schwert) und BFG (riesige grüne Explosion). Sie erscheinen nach dem Kauf als Startwaffe und im Rundenshop.'],['Info','Alle Namen und Bilder sind eigene Zeichnungen, die nur an bekannte Spiele erinnern. Bereits gekaufte Teile bleiben erhalten.']]},
@@ -3882,7 +3886,48 @@ async function coinFlip(out){const cn=$('#cn'),cj=$('#cj'),sh=$('#csh');if(!cn)r
  cj.animate([{transform:'translateY(0) scale(1)',easing:'cubic-bezier(.15,.7,.35,1)'},{transform:'translateY(-98px) scale(1.25)',offset:.4,easing:'cubic-bezier(.55,0,.85,.45)'},{transform:'translateY(0) scale(1)',offset:.72,easing:'ease-out'},{transform:'translateY(-22px) scale(1.04)',offset:.82,easing:'ease-in'},{transform:'translateY(0)',offset:.9,easing:'ease-out'},{transform:'translateY(-6px)',offset:.95,easing:'ease-in'},{transform:'translateY(0)'}],{duration:1700});
  if(sh)sh.animate([{transform:'scale(1)',opacity:.6},{transform:'scale(.45)',opacity:.25,offset:.4},{transform:'scale(1)',opacity:.6,offset:.72},{transform:'scale(.9)',offset:.82},{transform:'scale(1)',opacity:.6}],{duration:1700});
  setTimeout(()=>sfx('clack'),1230);setTimeout(()=>sfx('coinring'),1400);setTimeout(()=>sfx('tick'),1560);await sleep(1750)}
-const WHEEL=[0,0,0,0,0.5,0.5,1,1,1,1.5,2,4],WCOL={0:'#2b312b',0.5:'#7a5a1a',1:'#2f6b3a',1.5:'#1f8a8a',2:'#5a4ab0',4:'#d9a400'};
+const WHEEL=[0,0,0,0,0.5,0.5,1,1,1,1.5,2,4],WMULT=[4,0,1,0,2,.5,1,0,1.5,.5,1,0],WCOL={0:'#16181c',.5:'#a3202e',1:'#1f7d3f',1.5:'#1b82a0',2:'#5b44bd',4:'#e3b21c'},WPOS=(()=>{const u=[];return WHEEL.map(m=>{const p=WMULT.findIndex((x,i)=>x==m&&!u[i]);u[p]=1;return p})})();
+let wph=0,wlast=-1,wspin=null,wraf=0,wlastT=0,wHl=-1,wHlT=0;
+function wDraw(cv,ph,ball,hl,now){const c=cv.getContext('2d'),dpr=cv.width/560,cx=280,cy=176,R=250,K=.5,T=34,rad=Math.PI/180;
+ c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,560,380);c.lineJoin='round';
+ const P=fn=>{c.save();c.translate(cx,cy);c.scale(1,K);fn();c.restore()};
+ P(()=>{const g=c.createRadialGradient(0,T*2.3,R*.7,0,T*2.3,R*1.2);g.addColorStop(0,'rgba(0,0,0,.65)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.beginPath();c.arc(0,T*2.3,R*1.22,0,6.3);c.fill()});
+ c.beginPath();c.moveTo(cx-R,cy);c.lineTo(cx-R,cy+T);c.ellipse(cx,cy+T,R,R*K,0,Math.PI,0,true);c.lineTo(cx+R,cy);c.ellipse(cx,cy,R,R*K,0,0,Math.PI);c.closePath();
+ let g=c.createLinearGradient(cx-R,0,cx+R,0);[[0,'#1e0d05'],[.16,'#6a3115'],[.36,'#c87438'],[.55,'#7c3a18'],[.8,'#40200c'],[1,'#180a03']].forEach(s=>g.addColorStop(s[0],s[1]));c.fillStyle=g;c.fill();
+ g=c.createLinearGradient(cx-R,0,cx+R,0);[[0,'#6b4a0c'],[.3,'#ffe48a'],[.5,'#c99a2a'],[.75,'#f3d070'],[1,'#5b3c08']].forEach(s=>g.addColorStop(s[0],s[1]));c.strokeStyle=g;c.lineWidth=4;c.beginPath();c.ellipse(cx,cy+T*.55,R-1,(R-1)*K,0,.03*Math.PI,.97*Math.PI);c.stroke();
+ P(()=>{let g=c.createLinearGradient(-R,-R,R,R);g.addColorStop(0,'#d08844');g.addColorStop(.5,'#7a3a18');g.addColorStop(1,'#b2652e');c.fillStyle=g;c.beginPath();c.arc(0,0,R,0,6.3);c.fill();
+  c.strokeStyle='#ecc96a';c.lineWidth=3.4;c.beginPath();c.arc(0,0,R*.985,0,6.3);c.stroke();c.strokeStyle='rgba(0,0,0,.5)';c.lineWidth=2.4;c.beginPath();c.arc(0,0,R*.875,0,6.3);c.stroke();
+  for(let i=0;i<24;i++){const a=i*15*rad;c.fillStyle='#f4d474';c.beginPath();c.arc(Math.cos(a)*R*.93,Math.sin(a)*R*.93,3.6,0,6.3);c.fill();c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.arc(Math.cos(a)*R*.93+1,Math.sin(a)*R*.93+1.4,1.6,0,6.3);c.fill()}
+  g=c.createRadialGradient(0,0,R*.7,0,0,R*.865);g.addColorStop(0,'#07110c');g.addColorStop(.55,'#1b3a2b');g.addColorStop(1,'#42705a');c.fillStyle=g;c.beginPath();c.arc(0,0,R*.865,0,6.3);c.fill();
+  c.strokeStyle='rgba(255,255,255,.18)';c.lineWidth=2.2;c.beginPath();c.arc(0,0,R*.85,Math.PI*1.08,Math.PI*1.72);c.stroke();
+  for(let i=0;i<8;i++){const a=(i*45+22.5)*rad;c.save();c.translate(Math.cos(a)*R*.80,Math.sin(a)*R*.80);c.rotate(a+Math.PI/4);c.fillStyle='#ecc96a';c.fillRect(-5,-5,10,10);c.strokeStyle='#6b4a0c';c.lineWidth=1.2;c.strokeRect(-5,-5,10,10);c.restore()}});
+ P(()=>{for(let i=0;i<12;i++){const a1=(ph+i*30-90)*rad,a2=a1+30*rad;c.beginPath();c.arc(0,0,R*.70,a1,a2);c.arc(0,0,R*.46,a2,a1,true);c.closePath();c.fillStyle=WCOL[WMULT[i]];c.fill();
+   const g=c.createRadialGradient(0,0,R*.46,0,0,R*.70);g.addColorStop(0,'rgba(0,0,0,.6)');g.addColorStop(.5,'rgba(0,0,0,.1)');g.addColorStop(1,'rgba(255,255,255,.12)');c.fillStyle=g;c.fill();
+   if(hl==i){c.fillStyle='rgba(255,255,255,'+(.28+.22*Math.sin(now/1000*9))+')';c.fill()}}
+  c.strokeStyle='#e3bd55';c.lineWidth=2.6;for(let i=0;i<12;i++){const a=(ph+i*30-90)*rad;c.beginPath();c.moveTo(Math.cos(a)*R*.46,Math.sin(a)*R*.46);c.lineTo(Math.cos(a)*R*.70,Math.sin(a)*R*.70);c.stroke()}
+  c.lineWidth=3.2;c.beginPath();c.arc(0,0,R*.70,0,6.3);c.stroke();c.beginPath();c.arc(0,0,R*.46,0,6.3);c.stroke()});
+ c.font='800 17px Inter,Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';c.lineWidth=3.4;c.strokeStyle='rgba(0,0,0,.8)';
+ for(let i=0;i<12;i++){const a=(ph+i*30+15-90)*rad,x=cx+Math.cos(a)*R*.585,y=cy+Math.sin(a)*R*.585*K,t='×'+WMULT[i];c.strokeText(t,x,y);c.fillStyle='#fff';c.fillText(t,x,y)}
+ P(()=>{const g=c.createRadialGradient(-R*.08,-R*.1,R*.05,0,0,R*.46);g.addColorStop(0,'#d09040');g.addColorStop(.5,'#7a3f1a');g.addColorStop(1,'#2e1508');c.fillStyle=g;c.beginPath();c.arc(0,0,R*.455,0,6.3);c.fill();
+  for(let i=0;i<8;i++){const a=(ph+i*45)*rad;c.strokeStyle='rgba(236,196,96,.75)';c.lineWidth=2.2;c.beginPath();c.moveTo(Math.cos(a)*R*.27,Math.sin(a)*R*.27);c.lineTo(Math.cos(a)*R*.44,Math.sin(a)*R*.44);c.stroke()}
+  c.strokeStyle='rgba(255,230,160,.35)';c.lineWidth=2;c.beginPath();c.arc(0,0,R*.36,0,6.3);c.stroke()});
+ {const ty=cy-12;c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(cx+6,cy+4,R*.2,R*.2*K,0,0,6.3);c.fill();
+  let g=c.createRadialGradient(cx-16,ty-16,2,cx,ty,R*.24);g.addColorStop(0,'#fff6b8');g.addColorStop(.4,'#e3ac2c');g.addColorStop(1,'#6b4408');c.fillStyle=g;c.beginPath();c.ellipse(cx,ty,R*.2,R*.2*K*1.4,0,0,6.3);c.fill();c.strokeStyle='rgba(60,36,0,.55)';c.lineWidth=1.6;c.stroke();
+  for(let i=0;i<4;i++){const a=(ph+i*90)*rad,ex=cx+Math.cos(a)*R*.17,ey=ty-9+Math.sin(a)*R*.17*K;c.strokeStyle='#8a5a0c';c.lineWidth=7;c.lineCap='round';c.beginPath();c.moveTo(cx,ty-12);c.lineTo(ex,ey);c.stroke();c.strokeStyle='#f6d36a';c.lineWidth=4;c.stroke();c.fillStyle='#f6d36a';c.beginPath();c.arc(ex,ey,5,0,6.3);c.fill();c.strokeStyle='#7a560c';c.lineWidth=1;c.stroke()}
+  g=c.createRadialGradient(cx-3,ty-24,1,cx,ty-20,10);g.addColorStop(0,'#fff');g.addColorStop(.5,'#f1c850');g.addColorStop(1,'#7a560c');c.fillStyle=g;c.beginPath();c.arc(cx,ty-18,9,0,6.3);c.fill()}
+ if(ball){const a=(ball.a-90)*rad,x=cx+Math.cos(a)*R*ball.r,y=cy+Math.sin(a)*R*K*ball.r;c.fillStyle='rgba(0,0,0,.5)';c.beginPath();c.ellipse(x+2,y+3,7.5,3.6,0,0,6.3);c.fill();
+  const g=c.createRadialGradient(x-3,y-ball.h-7,1,x,y-ball.h-4,10);g.addColorStop(0,'#fff');g.addColorStop(.45,'#dde2ea');g.addColorStop(1,'#68707c');c.fillStyle=g;c.beginPath();c.arc(x,y-ball.h-4,8,0,6.3);c.fill()}}
+function wInit(){const cv0=$('#whc');if(!cv0)return;const dpr=Math.min(2,window.devicePixelRatio||1);cv0.width=560*dpr;cv0.height=380*dpr;cancelAnimationFrame(wraf);wlastT=performance.now();
+ const f=()=>{const cv=$('#whc');if(!cv){wraf=0;return}const now=performance.now(),dt=Math.min(.05,(now-wlastT)/1000);wlastT=now;let ball=null,hl=-1;
+  if(wspin){const s=wspin,u=Math.min(1,(now-s.t0)/s.T),ph=s.w0+s.W*(1-Math.pow(1-u,3)),D=s.D0*Math.pow(1-u,2.4);wph=ph;
+   const v=Math.max(0,Math.min(1,(u-.6)/.28));let r=.78-.195*v*v,h=8*(1-Math.min(1,v*1.6));if(v>.45&&v<1)h+=Math.abs(Math.sin((v-.45)*10))*(1-v)*16;if(u>.88&&u<.98)h+=Math.abs(Math.sin((u-.88)*50))*(.98-u)*90;if(u>=.88)r=.585;
+   ball={a:ph+s.pos*30+15+D,r,h};
+   if(u>.6){const k=Math.floor((D+s.pos*30+15)/30);if(k!=s.tk){if(s.tk!=-99&&u<.97)sfx('tick');s.tk=k}}else if(Math.floor((ph+D)/70)!=s.tr){s.tr=Math.floor((ph+D)/70);if(Math.random()<.5)sfx('tick')}
+   if(!s.landed&&u>=.88){s.landed=1;sfx('clack')}}
+  else{wph+=dt*9;if(wlast>=0)ball={a:wph+wlast*30+15,r:.585,h:0};if(now-wHlT<2400)hl=wHl}
+  wDraw(cv,wph,ball,hl,now);wraf=requestAnimationFrame(f)};wraf=requestAnimationFrame(f)}
+function wheelSpin(pos){return new Promise(res=>{const T=6400,w0=wph,W=360*3+Math.random()*120;wspin={t0:performance.now(),T,pos,w0,W,D0:360*9+Math.random()*60,tk:-99,tr:0,landed:0};wInit();
+ setTimeout(()=>{if(!wspin)return;wph=w0+W;wlast=pos;wHl=pos;wHlT=performance.now();wspin=null;res()},T+120)})}
 const SLOTS=['🍒','🍋','🔔','⭐','💎','7️⃣'],SLOTPAY=[5,8,15,30,100,250];
 function gambleView(){
  const c=S.coins;
@@ -3898,7 +3943,7 @@ function gRefresh(){const c=S.coins,n=$('#gnet');if(!n)return;n.textContent=(c.n
 function setBet(v){gbet=Math.max(1,Math.min(S.coins.max_bet,Math.floor(v)));const i=$('#gb');if(i)i.value=gbet}
 function gStage(){
  if(gm=='flip')return `<div class="coinwrap"><div class="cshadow" id="csh"></div><div class="ctilt"><div id="cj" class="cjump"><div id="cn" class="cn" style="transform:rotateX(${coinRot}deg)">${coinEdge()}<div class="cf"><span class="cic">♛</span><b>KOPF</b></div><div class="cf cb"><span class="cic">◆</span><b>ZAHL</b></div></div></div></div></div><p class="dim">Richtig geraten: Einsatz ×1,9</p><button class="btn pri" onclick="play('kopf')">Kopf</button> <button class="btn pri" onclick="play('zahl')">Zahl</button>`;
- if(gm=='wheel')return `<div class="wheelwrap"><div class="ptr"></div><div id="wh" class="wh" style="background:conic-gradient(${WHEEL.map((m,i)=>`${WCOL[m]} ${i*30}deg ${i*30+30}deg`).join(',')});transform:rotate(${wrot}deg)">${WHEEL.map((m,i)=>`<span style="transform:rotate(${i*30+15}deg) translateY(-82px)">×${m}</span>`).join('')}</div></div><p class="dim">Von ×0 bis ×4</p><button class="btn pri" onclick="play()">Drehen</button>`;
+ if(gm=='wheel')return `<div class="rwrap"><canvas id="whc" class="whc" width="560" height="380"></canvas><img src="${CHBL}" alt="" style="display:none" onload="wInit()"></div><div class="wleg">${[0,.5,1,1.5,2,4].map(m=>`<span><i style="background:${WCOL[m]}"></i>×${m}</span>`).join('')}</div><p class="dim">Die Kugel fällt in eines von 12 Fächern. Gewinn = Einsatz × Zahl im Fach (×0 bis ×4).</p><button class="btn pri" onclick="play()">Drehen</button>`;
  if(gm=='slots')return `<div class="slot" id="slotm"><div class="slotlights">${'<i></i>'.repeat(12)}</div><div class="slottitle">★ D-HUB SLOTS ★</div><div class="rwin"><div class="reels">${['🍒','🍋','🔔'].map((e,i)=>`<div class="reel" id="r${i}"><div class="rsym">${e}</div></div>`).join('')}</div></div><div class="slotpay">${SLOTS.map((s,i)=>`<span>${s}<b>×${SLOTPAY[i]}</b></span>`).join('')}<span>🍒🍒<b>×1,1</b></span></div><div class="slotlights bot">${'<i></i>'.repeat(12)}</div></div><button class="btn pri slotbtn" onclick="play()">Drehen</button>`;
  const ch=dmode=='under'?dtarget:100-dtarget;
  return `${d20Html()}<div class="dnum" id="dn">–</div><div class="dim" id="d20c">Der W20 bestimmt den Bereich (jede Zahl = 5 Prozentpunkte), die genaue Zahl steht darüber.</div><div class="row" style="justify-content:center"><button class="btn ${dmode=='under'?'pri':''}" onclick="dmode='under';render()">Unter</button><button class="btn ${dmode=='over'?'pri':''}" onclick="dmode='over';render()">Über</button></div>
@@ -3913,7 +3958,7 @@ async function play(pick){
  if(!r.ok){toast(r.msg);gbusy=false;document.querySelectorAll('#gstage button,#gstage input').forEach(b=>b.disabled=false);gRefresh();return}
  const x=r.result,d=x.detail;
  if(gm=='flip'){await coinFlip(d.out)}
- else if(gm=='wheel'){wrot=Math.ceil(wrot/360)*360+360*5+(360-(d.index*30+15));const w=$('#wh');w.style.transition='transform 4s cubic-bezier(.12,.7,.15,1)';w.style.transform='rotate('+wrot+'deg)';await sleep(4100)}
+ else if(gm=='wheel'){await wheelSpin(WPOS[d.index])}
  else if(gm=='slots'){const rs=[0,1,2].map(i=>$('#r'+i)),stops=[1000,1550,2100],t0=Date.now(),fin=[false,false,false];let nd=0,dn=0;rs.forEach(r=>r.classList.add('spin'));
   while(Date.now()-t0<2200){const el=Date.now()-t0;if(el>=nd){sfx('ding',dn++%7);nd=el+115}
    for(let i=0;i<3;i++){if(fin[i])continue;if(el>=stops[i]){fin[i]=true;const r=rs[i];r.classList.remove('spin');r.querySelector('.rsym').textContent=d.syms[i];r.classList.add('land');setTimeout(()=>r.classList.remove('land'),420);sfx('clack')}else rs[i].querySelector('.rsym').textContent=SLOTS[Math.floor(Math.random()*6)]}

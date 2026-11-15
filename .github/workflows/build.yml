@@ -35,7 +35,7 @@ jobs:
         run: |
           $extra = @()
           if (Test-Path dhub_overlay.dll) { $extra += "--add-binary", "dhub_overlay.dll;." } else { Write-Host "Overlay-Bibliothek fehlt, Build laeuft ohne sie" }
-          pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." --collect-all webview --collect-all clr_loader --collect-all pythonnet --hidden-import clr @extra dhub.py
+          pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." --collect-all webview --hidden-import clr @extra dhub.py
       - name: Installer bauen
         shell: pwsh
         env:

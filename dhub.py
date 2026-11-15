@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.15"
+VERSION = "3.16"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -346,6 +346,35 @@ def open_window(url):
 
 
 WINMODE = ["noch nicht gestartet"]
+NOGPU = [False]
+
+
+def local_dir():
+    base = os.environ.get("LOCALAPPDATA") or HERE
+    d = os.path.join(base, "D-Hub")
+    try:
+        os.makedirs(d, exist_ok=True)
+        return d
+    except Exception:
+        return HERE
+
+
+def relaunch_nogpu():
+    """Fenster blieb leer: einmal ohne GPU-Beschleunigung neu starten (haeufigste Ursache fuer ein schwarzes WebView2-Fenster)."""
+    try:
+        open(os.path.join(local_dir(), "nogpu.flag"), "w").write("1")
+    except Exception:
+        pass
+    exe = sys.executable
+    cmd = '"%s"' % exe if getattr(sys, "frozen", False) else '"%s" "%s"' % (exe, os.path.abspath(__file__))
+    env = {k: v for k, v in os.environ.items() if k != "_MEIPASS2"}
+    log("Fenster blieb leer: Neustart ohne GPU-Beschleunigung")
+    try:
+        subprocess.Popen(["cmd", "/c", "ping -n 3 127.0.0.1 >nul & " + cmd], env=env, creationflags=0x08000008, close_fds=True)
+    except Exception as e:
+        log("relaunch: %s" % e)
+        return
+    os._exit(0)
 
 
 def run_window(url):
@@ -382,7 +411,15 @@ def run_window(url):
         win = webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805", fullscreen=FS[0])
         WIN[0] = win
 
-        data = os.path.join(HERE, "webview-data")
+        data = os.path.join(local_dir(), "webview-data")
+        if os.path.exists(os.path.join(local_dir(), "nogpu.flag")) or os.environ.get("DHUB_NOGPU"):
+            NOGPU[0] = True
+            os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--disable-gpu --disable-gpu-compositing"
+        try:
+            win.events.loaded += lambda: log("Seite im Fenster geladen")
+        except Exception:
+            pass
+        log("Fenster wird geoeffnet (GPU %s, Profil %s)" % ("aus" if NOGPU[0] else "an", data))
         def watch():
             """Bleibt das Fenster schwarz/leer, wird neu geladen. Hilft das nicht, kommt eine Fehlerseite mit Knoepfen."""
             for attempt in range(2):
@@ -406,7 +443,18 @@ def run_window(url):
                     win.load_url(url + "?r=%d" % int(time.time()))
                 except Exception as e:
                     log("load_url: %s" % e)
+            if not NOGPU[0]:
+                relaunch_nogpu()
             log("Fenster bleibt leer: Fehlerseite im Programmfenster")
+            def ask_browser():
+                try:
+                    import ctypes
+                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft.\n\nDie Datei dhub.log neben der D-Hub.exe (oder unter %LOCALAPPDATA%\\D-Hub) enthält den Grund.\n\nZur Not im Browser öffnen?", "D-Hub", 0x24)
+                    if r == 6:
+                        open_window(url)
+                except Exception as e:
+                    log("ask_browser: %s" % e)
+            threading.Thread(target=ask_browser, daemon=True).start()
             try:
                 win.load_html('<body style="background:#050805;color:#ddd;font:15px system-ui;padding:40px"><h2>D-Hub startet nicht richtig</h2>'
                               '<p><a style="color:#5cff0c" href="%s">Neu laden</a></p><pre style="white-space:pre-wrap;color:#9a9">%s</pre></body>'
@@ -4338,6 +4386,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.16',d:'15.11.2026',t:'Schwarzes Programmfenster repariert',i:[['Fix','Blieb das D-Hub-Fenster schwarz, startet D-Hub jetzt automatisch einmal ohne GPU-Beschleunigung neu (häufigste Ursache auf manchen Grafiktreibern) und merkt sich das. Hilft auch das nicht, fragt D-Hub, ob es ausnahmsweise im Browser geöffnet werden soll, statt ein leeres Fenster zu lassen.'],['Fix','Das Fenster-Profil liegt jetzt unter %LOCALAPPDATA%\\D-Hub statt im Programmordner, damit es auch bei Installation in geschützten Ordnern angelegt werden kann. In dhub.log steht, wie das Fenster gestartet wurde.']]},
  {v:'3.15',d:'15.11.2026',t:'Casino, Chips-Tasche und viele Fixes',i:[['Neu','Der Gamble-Reiter heißt jetzt Casino und ist eine Lobby aus der Draufsicht: Teppichboden, Holz und Gold, mit Poker-Tisch, Roulette, Münzwurf-Tisch, Slot-Automaten und der Kasse. Klick auf einen Tisch, und dein Männchen läuft dorthin.'],['Neu','Chips-Tasche: Deine Chips gelten an allen Tischen (Poker, Roulette, Münzwurf, Slots). An der Kasse tauschst du D-Hub Dollar 1:1 in Chips und zurück, nur in 5er-, 10er-, 50er- und 100er-Chips. D-Hub Dollar lassen sich weiterhin nicht kaufen und haben keinen Geldwert.'],['Neu','Poker: Einstieg schon ab 5 Chips, edlerer Tisch mit Holzrand, strukturiertem Filz und neuen Karten. Aufgedeckte Gegnerkarten liegen jetzt auf dem Tisch vor den Spielern und drehen sich beim Showdown um, mit Name der Hand.'],['Neu','Invaders: Power-ups stapeln sich ohne Limit. Jedes Schnellfeuer macht schneller, jeder Dreifachschuss fächert mehr Schüsse auf (3, 5, 7, ...), jeder Schild fängt einen Treffer ab, und Leben sind unbegrenzt.'],['Fix','D-Hub startet nie mehr als Browser-Fenster: Es öffnet immer das eigene Programmfenster. Hängt der Start einmal, wird das Fenster-Profil zurückgesetzt und es wird erneut das Programmfenster geöffnet. Fehlt die WebView2-Komponente, erscheint eine Meldung statt eines Browsers.']]},
  {v:'3.14',d:'15.11.2026',t:'Lounge-Musik am Poker-Tisch',i:[['Neu','Am Poker-Tisch läuft jetzt ruhige Lounge-Jazz-Musik (Kontrabass, weiche Akkorde, leichter Besen-Rhythmus und gelegentliche Vibraphon-Töne). Sie endet, sobald du den Poker-Reiter verlässt, und lässt sich mit dem Lautsprecher-Knopf stummschalten.']]},
  {v:'3.13',d:'15.11.2026',t:'D-Hub Dollar, Kassiererin und Poker-Chips',i:[['Neu','Die Währung heißt jetzt D-Hub Dollar und hat ein eigenes Zeichen: ein D mit zwei senkrechten Strichen wie beim echten Dollar. Der Geldschein ist im Shop zu sehen.'],['Neu','Neue D-Hub-Pokerchips in Grün (5), Blau (10), Lila (50) und Gelb (100), auf dem Tisch und bei der Auswahl.'],['Neu','Vor dem Poker spricht dich die Kassiererin an und tauscht deine D-Hub Dollar 1:1 in Chips, nur in den Größen 5, 10, 50 und 100. Hast du alles verloren, tauscht sie dir neue Chips.'],['Neu','Am Tisch gibt es unten rechts eine Tür: Damit kannst du jederzeit aussteigen und dir deine Chips auszahlen lassen, auch mitten in einer Hand (die Hand verfällt dann).']]},

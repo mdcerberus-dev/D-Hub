@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.17"
+VERSION = "3.18"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -505,47 +505,57 @@ def run_window(url):
             pass
         log("Fenster wird geoeffnet (GPU %s, Profil %s)" % ("aus" if NOGPU[0] else "an", data))
         def watch():
-            """Bleibt das Fenster schwarz/leer, wird neu geladen. Hilft das nicht, kommt eine Fehlerseite mit Knoepfen."""
-            for attempt in range(2):
-                ok = False
-                for _ in range(16):
+            """Bleibt das Fenster schwarz/leer, sagt D-Hub nach wenigen Sekunden warum, statt stumm schwarz zu bleiben."""
+            def page_ok(secs):
+                end = time.time() + secs
+                while time.time() < end:
                     time.sleep(.5)
                     try:
-                        ok = bool(win.evaluate_js("!!window.__ok"))
-                    except Exception:
-                        ok = False
-                    if ok:
-                        break
-                if ok:
-                    try:
-                        os.remove(guard)
+                        if not win.events.loaded.is_set():  # evaluate_js wuerde sonst bis zu 20 s blockieren
+                            continue
                     except Exception:
                         pass
-                    return
-                log("Fenster blieb leer, lade neu (Versuch %d)" % (attempt + 1))
+                    res = [False]
+
+                    def ev():
+                        try:
+                            res[0] = bool(win.evaluate_js("!!window.__ok"))
+                        except Exception:
+                            pass
+                    t = threading.Thread(target=ev, daemon=True)
+                    t.start()
+                    t.join(3)
+                    if res[0]:
+                        return True
+                return False
+            if page_ok(12):
                 try:
-                    win.load_url(url + "?r=%d" % int(time.time()))
-                except Exception as e:
-                    log("load_url: %s" % e)
-            if not NOGPU[0]:
+                    os.remove(guard)
+                except Exception:
+                    pass
+                return
+            try:
+                loaded = win.events.loaded.is_set()
+            except Exception:
+                loaded = None
+            log("Fenster blieb leer (Seite geladen: %s, Fehler der Fenster-Komponente: %s)" % (loaded, " / ".join(WVLOG) or "keine"))
+            if not WVLOG and not NOGPU[0]:
                 relaunch_nogpu()
-            log("Fenster bleibt leer: Fehlerseite im Programmfenster")
+            try:
+                tail = "".join(open(LOGF, encoding="utf-8", errors="replace").readlines()[-9:])
+            except Exception:
+                tail = ""
+            why = "\n".join(WVLOG[-3:]) or ("Die WebView2 Runtime von Microsoft wurde nicht gefunden." if not rt else "Die Fenster-Komponente meldet keinen Fehler (WebView2 Runtime %s, Seite geladen: %s)." % (rt, loaded))
+
             def ask_browser():
                 try:
                     import ctypes
-                    why = "\n".join(WVLOG[-3:]) or ("Die WebView2 Runtime von Microsoft wurde nicht gefunden." if not rt else "Die Fenster-Komponente meldet keinen Fehler (WebView2 Runtime %s)." % rt)
-                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft.\n\nGrund:\n" + why[:900] + "\n\n(Bitte ein Foto dieser Meldung schicken. Details stehen in dhub.log neben der D-Hub.exe.)\n\nZur Not im Browser öffnen?", "D-Hub", 0x24)
+                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft. Bitte ein Foto dieser Meldung schicken.\n\nGrund:\n" + why[:700] + "\n\nProtokoll:\n" + tail[-1100:] + "\nZur Not im Browser öffnen?", "D-Hub " + VERSION, 0x24)
                     if r == 6:
                         open_window(url)
                 except Exception as e:
                     log("ask_browser: %s" % e)
             threading.Thread(target=ask_browser, daemon=True).start()
-            try:
-                win.load_html('<body style="background:#050805;color:#ddd;font:15px system-ui;padding:40px"><h2>D-Hub startet nicht richtig</h2>'
-                              '<p><a style="color:#5cff0c" href="%s">Neu laden</a></p><pre style="white-space:pre-wrap;color:#9a9">%s</pre></body>'
-                              % (url, debug_info().replace("&", "&amp;").replace("<", "&lt;")))
-            except Exception:
-                pass
         try:
             webview.start(watch, gui="edgechromium", private_mode=False, storage_path=data)
         except TypeError:
@@ -4471,6 +4481,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.18',d:'15.11.2026',t:'Leeres Fenster meldet sich schneller',i:[['Fix','Bleibt das Programmfenster leer, erscheint jetzt nach rund 15 bis 30 Sekunden eine Meldung mit dem Grund und den letzten Protokollzeilen. Vorher konnte die Prüfung minutenlang hängen, sodass nur ein schwarzes Fenster zu sehen war.']]},
  {v:'3.17',d:'15.11.2026',t:'Schwarzes Fenster: Ursache behoben und sichtbar gemacht',i:[['Fix','In der gebauten D-Hub.exe konnte die Fenster-Komponente ihre Hilfsdatei WebView2Loader.dll nicht finden, dann blieb das Fenster ohne Fehlermeldung schwarz. D-Hub legt die Datei jetzt beim Start an die richtige Stelle.'],['Fix','Fehler der Fenster-Komponente stehen jetzt in dhub.log. Bleibt das Fenster trotzdem leer, zeigt D-Hub den genauen Grund direkt in einer Meldung an.'],['Fix','Der Neustart ohne GPU-Beschleunigung nutzt ein eigenes Fenster-Profil, damit er nicht am alten Profil scheitert.']]},
  {v:'3.16',d:'15.11.2026',t:'Schwarzes Programmfenster repariert',i:[['Fix','Blieb das D-Hub-Fenster schwarz, startet D-Hub jetzt automatisch einmal ohne GPU-Beschleunigung neu (häufigste Ursache auf manchen Grafiktreibern) und merkt sich das. Hilft auch das nicht, fragt D-Hub, ob es ausnahmsweise im Browser geöffnet werden soll, statt ein leeres Fenster zu lassen.'],['Fix','Das Fenster-Profil liegt jetzt unter %LOCALAPPDATA%\\D-Hub statt im Programmordner, damit es auch bei Installation in geschützten Ordnern angelegt werden kann. In dhub.log steht, wie das Fenster gestartet wurde.']]},
  {v:'3.15',d:'15.11.2026',t:'Casino, Chips-Tasche und viele Fixes',i:[['Neu','Der Gamble-Reiter heißt jetzt Casino und ist eine Lobby aus der Draufsicht: Teppichboden, Holz und Gold, mit Poker-Tisch, Roulette, Münzwurf-Tisch, Slot-Automaten und der Kasse. Klick auf einen Tisch, und dein Männchen läuft dorthin.'],['Neu','Chips-Tasche: Deine Chips gelten an allen Tischen (Poker, Roulette, Münzwurf, Slots). An der Kasse tauschst du D-Hub Dollar 1:1 in Chips und zurück, nur in 5er-, 10er-, 50er- und 100er-Chips. D-Hub Dollar lassen sich weiterhin nicht kaufen und haben keinen Geldwert.'],['Neu','Poker: Einstieg schon ab 5 Chips, edlerer Tisch mit Holzrand, strukturiertem Filz und neuen Karten. Aufgedeckte Gegnerkarten liegen jetzt auf dem Tisch vor den Spielern und drehen sich beim Showdown um, mit Name der Hand.'],['Neu','Invaders: Power-ups stapeln sich ohne Limit. Jedes Schnellfeuer macht schneller, jeder Dreifachschuss fächert mehr Schüsse auf (3, 5, 7, ...), jeder Schild fängt einen Treffer ab, und Leben sind unbegrenzt.'],['Fix','D-Hub startet nie mehr als Browser-Fenster: Es öffnet immer das eigene Programmfenster. Hängt der Start einmal, wird das Fenster-Profil zurückgesetzt und es wird erneut das Programmfenster geöffnet. Fehlt die WebView2-Komponente, erscheint eine Meldung statt eines Browsers.']]},

@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.7"
+VERSION = "3.8"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -2444,8 +2444,17 @@ def do_action(b):
                 autostart_set(False)
             except Exception:
                 pass
-            subprocess.Popen([un], cwd=HERE, close_fds=True)
-            threading.Thread(target=lambda: (time.sleep(1.5), os._exit(0)), daemon=True).start()
+            # Deinstaller über ein eigenes Skript starten, damit er nicht Kind von D-Hub ist
+            # (sonst beendet sein taskkill /t ihn selbst) und Reste im Ordner sicher verschwinden.
+            bat = os.path.join(tempfile.gettempdir(), "dhub_uninstall.bat")
+            with open(bat, "w", encoding="mbcs", errors="replace") as f:
+                f.write('@echo off\r\nping -n 4 127.0.0.1 >nul\r\ntaskkill /f /t /im D-Hub.exe >nul 2>&1\r\nping -n 3 127.0.0.1 >nul\r\n'
+                        '"%s" /SILENT /NORESTART\r\nping -n 15 127.0.0.1 >nul\r\ncd /d "%%TEMP%%"\r\n'
+                        'if exist "%s" rmdir /s /q "%s"\r\ndel "%%~f0"\r\n' % (un, HERE, HERE))
+            env = {k: v for k, v in os.environ.items() if k != "_MEIPASS2"}
+            env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+            subprocess.Popen(["cmd", "/c", bat], creationflags=0x08000000 | 0x00000008 | 0x00000200, close_fds=True, env=env)
+            threading.Thread(target=lambda: (time.sleep(1.0), os._exit(0)), daemon=True).start()
     elif n == "gamecfg" and isinstance(b.get("id"), str):
         store.setdefault("gamecfg", {})[b["id"][:80]] = clean_cfg(b.get("cfg"))
         save()
@@ -2987,7 +2996,7 @@ function valView(){
 function setView(){return setView0()+uninstPanel()}
 function uninstPanel(){
  const T2=S.uninst;
- return `<div class="panel" style="border-color:rgba(255,80,80,.35)"><b>Deinstallieren</b><p class="dim">${T2?'Entfernt D-Hub von diesem PC, inklusive Desktop-Verknüpfung und Autostart. Deine Spiele und Launcher bleiben unberührt.':'Diese Version wurde nicht über das Setup installiert. Zum Entfernen einfach die Datei D-Hub.exe samt Ordner löschen.'}</p><button class="btn" ${T2?'':'disabled'} onclick="if(confirm('D-Hub wirklich deinstallieren?')){api('action',{name:'uninstall'});toast('Deinstallation startet …')}">D-Hub deinstallieren</button></div>`}
+ return `<div class="panel" style="border-color:rgba(255,80,80,.35)"><b>Deinstallieren</b><p class="dim">${T2?'Entfernt D-Hub von diesem PC, inklusive Desktop-Verknüpfung und Autostart. Deine Spiele und Launcher bleiben unberührt.':'Diese Version wurde nicht über das Setup installiert. Zum Entfernen einfach die Datei D-Hub.exe samt Ordner löschen.'}</p><button class="btn" ${T2?'':'disabled'} onclick="if(confirm('D-Hub wirklich deinstallieren? Der ganze D-Hub-Ordner wird gelöscht, auch dein Coin-Stand und die Einstellungen (hub_data.json).')){api('action',{name:'uninstall'});toast('Deinstallation startet …')}">D-Hub deinstallieren</button></div>`}
 function setView0(){
  const c=s=>S.games.filter(g=>g.versions.some(v=>v.store==s)).length, L=S.launchers, has=x=>L.includes(x), P=S.perms||{}, E=S.errs, T=S.settings;
  const chip=k=>({ok:'<i class="b ok">Bereit</i>',todo:'<i class="b warn">Aktion nötig</i>',na:'<i class="b mute">Nicht erkannt</i>'}[k]||'');
@@ -3771,6 +3780,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.8',d:'15.11.2026',t:'Deinstallieren repariert',i:[['Fix','„D-Hub deinstallieren“ in den Einstellungen löscht D-Hub jetzt wirklich: Der Deinstaller läuft getrennt von D-Hub, beendet D-Hub samt Fensterprozessen, entfernt Verknüpfungen und Autostart und löscht danach auch übrig gebliebene Dateien im Ordner. Vorher beendete D-Hub den eigenen Deinstaller mit.'],['Info','Beim Deinstallieren verschwinden auch Coin-Stand und Einstellungen (hub_data.json). Deine Spiele bleiben unberührt.']]},
  {v:'3.7',d:'15.11.2026',t:'Deine Figuren: weiblich und männlich',i:[['Neu','Das Männchen ist jetzt deine gezeichnete Figur, einmal weiblich (mit Wimpern, Hände in den Hüften) und einmal männlich, mit dem grünen Neon-Umriss, grauem Oberteil, blauer Shorts und dunklen Schuhen. Beide sind kostenlos und in der Arcade und im Shop wählbar.'],['Neu','Die komplette Garderobe passt auf beide Figuren: Frisuren, Mützen, Kopfhörer, Gesichter, Oberteile und Schuhe. Wer kein Teil trägt, sieht genau deine Originalfigur. Ein neues Gesicht ersetzt Augen, Brauen und Mund, bei der weiblichen Figur mit Wimpern.'],['Neu','Im Shop zeigen die Vorschaubilder jetzt nur das jeweilige Teil an der aktiven Figur (Kopf, Oberkörper oder Füße), und oben siehst du beide Figuren nebeneinander.'],['Fix','Die Beine gehen sauber in den Körper über und schwingen beim Laufen in Survivor und Invaders.']]},
  {v:'3.6',d:'15.11.2026',t:'Männchen-Umbau, Garderobe, Easter-Egg-Waffen',i:[['Fix','Das Männchen steht jetzt ganz normal: Kopf, Oberkörper, Arme und zwei echte Beine mit Füßen. Beim Laufen schwingen die Beine. Die Füße gehen nicht mehr in den Körper über.'],['Neu','Viel mehr Auswahl im Shop: 6 Frisuren, 9 Mützen und Hüte (Kappe, Strickmütze, Weihnachtsmütze, Fischerhut, Klempner-Kappe, Cowboyhut, Zylinder, Zauberhut, Wikingerhelm, Krone), 5 Kopfhörer (Ohrenwärmer, Neon, Gaming-Headset, Katzenohren, DJ), 9 Gesichter (fröhlich, grimmig, zwinkernd, Nerd-Brille, Schnurrbart, Augenklappe, Sonnenbrille, Katze, Roboter), 7 Oberteile (T-Shirt, Hawaiihemd, Klempner-Overall, Hoodie, Anzug, Ritter- und Goldrüstung) und 5 Schuhe (Retro-Turnschuhe, Gummistiefel, Sneaker, Lederstiefel, Goldstiefel). Alles lässt sich frei kombinieren.'],['Neu','Sieben freischaltbare Survivor-Waffen als Easter Eggs, im Shop kaufbar: Bumerang (kommt zurück), Feuerblume (springende Feuerbälle), Schwerkraft-Kanone (schleudert Gegner weg), Portal-Pistole (versetzt Gegner ans andere Ende der Arena), Energiewelle (durchschlägt mehrere), Laserklinge (leuchtendes Schwert) und BFG (riesige grüne Explosion). Sie erscheinen nach dem Kauf als Startwaffe und im Rundenshop.'],['Info','Alle Namen und Bilder sind eigene Zeichnungen, die nur an bekannte Spiele erinnern. Bereits gekaufte Teile bleiben erhalten.']]},
  {v:'3.5',d:'15.11.2026',t:'Update-Knopf an der Versionsnummer',i:[['Neu','Sobald ein neues Release auf GitHub bereitliegt, erscheint direkt neben der Versionsnummer oben links ein pulsierender Knopf „Update x.y“. Ein Klick lädt das Update und startet D-Hub neu.'],['Neu','Ein Klick auf die Versionsnummer selbst sucht sofort nach Updates und meldet, ob eine neue Version da ist.']]},

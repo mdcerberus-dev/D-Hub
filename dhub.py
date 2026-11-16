@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.18"
+VERSION = "3.19"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -362,6 +362,27 @@ def local_dir():
 WVLOG = []
 
 
+def dpi_info(title=None):
+    """DPI-Einstellung des Prozesses (und optional eines Fensters) fuer das Protokoll: 0 = aus, 1 = System, 2 = pro Monitor."""
+    try:
+        import ctypes
+        v = ctypes.c_int(-1)
+        ctypes.windll.shcore.GetProcessDpiAwareness(None, ctypes.byref(v))
+        out = "Prozess %d" % v.value
+        if title:
+            u = ctypes.windll.user32
+            u.FindWindowW.restype = ctypes.c_void_p
+            u.GetWindowDpiAwarenessContext.restype = ctypes.c_void_p
+            u.GetWindowDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+            u.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+            h = u.FindWindowW(None, title)
+            if h:
+                out += ", Fenster %d" % u.GetAwarenessFromDpiAwarenessContext(u.GetWindowDpiAwarenessContext(h))
+        return out
+    except Exception as e:
+        return "unbekannt (%s)" % e
+
+
 def wv_logging():
     """Meldungen der Fenster-Komponente (pywebview) landen in dhub.log. Ohne das bleibt ein WebView2-Startfehler unsichtbar und das Fenster einfach schwarz."""
     import logging
@@ -441,7 +462,7 @@ def wv_runtime():
 def relaunch_nogpu():
     """Fenster blieb leer: einmal ohne GPU-Beschleunigung neu starten (haeufigste Ursache fuer ein schwarzes WebView2-Fenster)."""
     try:
-        open(os.path.join(local_dir(), "nogpu.flag"), "w").write("1")
+        open(os.path.join(local_dir(), "nogpu2.flag"), "w").write("1")
     except Exception:
         pass
     exe = sys.executable
@@ -494,8 +515,12 @@ def run_window(url):
         win = webview.create_window("D-Hub", url, width=1320, height=840, min_size=(960, 620), background_color="#050805", fullscreen=FS[0])
         WIN[0] = win
 
+        try:
+            os.remove(os.path.join(local_dir(), "nogpu.flag"))  # alter Merker aus 3.16 bis 3.18: die GPU war nicht die Ursache
+        except Exception:
+            pass
         data = os.path.join(local_dir(), "webview-data")
-        if os.path.exists(os.path.join(local_dir(), "nogpu.flag")) or os.environ.get("DHUB_NOGPU"):
+        if os.path.exists(os.path.join(local_dir(), "nogpu2.flag")) or os.environ.get("DHUB_NOGPU"):
             NOGPU[0] = True
             data = os.path.join(local_dir(), "webview-data-nogpu")  # eigenes Profil: gleiche Ordner mit anderen Startoptionen lassen WebView2 scheitern
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--disable-gpu --disable-gpu-compositing"
@@ -538,7 +563,8 @@ def run_window(url):
                 loaded = win.events.loaded.is_set()
             except Exception:
                 loaded = None
-            log("Fenster blieb leer (Seite geladen: %s, Fehler der Fenster-Komponente: %s)" % (loaded, " / ".join(WVLOG) or "keine"))
+            dpi = dpi_info("D-Hub")
+            log("Fenster blieb leer (Seite geladen: %s, DPI: %s, Fehler der Fenster-Komponente: %s)" % (loaded, dpi, " / ".join(WVLOG) or "keine"))
             if not WVLOG and not NOGPU[0]:
                 relaunch_nogpu()
             try:
@@ -550,7 +576,7 @@ def run_window(url):
             def ask_browser():
                 try:
                     import ctypes
-                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft. Bitte ein Foto dieser Meldung schicken.\n\nGrund:\n" + why[:700] + "\n\nProtokoll:\n" + tail[-1100:] + "\nZur Not im Browser öffnen?", "D-Hub " + VERSION, 0x24)
+                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft. Bitte ein Foto dieser Meldung schicken.\n\nDPI: " + dpi + "\n\nGrund:\n" + why[:500] + "\n\nProtokoll:\n" + tail[-900:] + "\nZur Not im Browser öffnen?", "D-Hub " + VERSION, 0x24)
                     if r == 6:
                         open_window(url)
                 except Exception as e:
@@ -4481,6 +4507,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.19',d:'15.11.2026',t:'Schwarzes Fenster: Fehler 0x8007139F',i:[['Fix','Das Programmfenster blieb schwarz, weil WebView2 mit dem Fehler 0x8007139F abbrach. Laut Microsoft ist die häufigste Ursache eine DPI-Einstellung, die nicht zum Browserprozess des Fensters passt. D-Hub legt diese Einstellung jetzt als Allererstes beim Start fest, bevor irgendein Fenster oder Hintergrunddienst entsteht.'],['Fix','Die Grafikbeschleunigung ist wieder an: Sie war nicht die Ursache. Die Fehlermeldung bei leerem Fenster zeigt zusätzlich die DPI-Werte.']]},
  {v:'3.18',d:'15.11.2026',t:'Leeres Fenster meldet sich schneller',i:[['Fix','Bleibt das Programmfenster leer, erscheint jetzt nach rund 15 bis 30 Sekunden eine Meldung mit dem Grund und den letzten Protokollzeilen. Vorher konnte die Prüfung minutenlang hängen, sodass nur ein schwarzes Fenster zu sehen war.']]},
  {v:'3.17',d:'15.11.2026',t:'Schwarzes Fenster: Ursache behoben und sichtbar gemacht',i:[['Fix','In der gebauten D-Hub.exe konnte die Fenster-Komponente ihre Hilfsdatei WebView2Loader.dll nicht finden, dann blieb das Fenster ohne Fehlermeldung schwarz. D-Hub legt die Datei jetzt beim Start an die richtige Stelle.'],['Fix','Fehler der Fenster-Komponente stehen jetzt in dhub.log. Bleibt das Fenster trotzdem leer, zeigt D-Hub den genauen Grund direkt in einer Meldung an.'],['Fix','Der Neustart ohne GPU-Beschleunigung nutzt ein eigenes Fenster-Profil, damit er nicht am alten Profil scheitert.']]},
  {v:'3.16',d:'15.11.2026',t:'Schwarzes Programmfenster repariert',i:[['Fix','Blieb das D-Hub-Fenster schwarz, startet D-Hub jetzt automatisch einmal ohne GPU-Beschleunigung neu (häufigste Ursache auf manchen Grafiktreibern) und merkt sich das. Hilft auch das nicht, fragt D-Hub, ob es ausnahmsweise im Browser geöffnet werden soll, statt ein leeres Fenster zu lassen.'],['Fix','Das Fenster-Profil liegt jetzt unter %LOCALAPPDATA%\\D-Hub statt im Programmordner, damit es auch bei Installation in geschützten Ordnern angelegt werden kann. In dhub.log steht, wie das Fenster gestartet wurde.']]},
@@ -5065,6 +5092,16 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if IS_WIN:
+        # Als Allererstes, bevor irgendein Thread oder Fenster entsteht: Die DPI-Einstellung des Prozesses festlegen.
+        # Aendert sie sich erst spaeter (waehrend das Programmfenster entsteht), passt das Fenster nicht mehr zu seinem
+        # WebView2-Browserprozess, und WebView2 bricht mit 0x8007139F ab: Das Fenster bleibt schwarz.
+        try:
+            import ctypes
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+        log("DPI beim Start: " + dpi_info())
     url = "http://127.0.0.1:%d" % PORT
     try:  # laeuft D-Hub schon?
         ex = fetch_json(url + "/api/state?probe=1")

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [dhub.py, logo.png, logo.ico, installer.iss, AGB.txt]
+    paths: [dhub.py, logo.png, logo.ico, installer.iss, AGB.txt, overlay/dhub_overlay.cpp]
 permissions:
   contents: write
 jobs:
@@ -24,7 +24,18 @@ jobs:
           [System.IO.File]::WriteAllText("$PWD/dhub.py", $src, (New-Object System.Text.UTF8Encoding($false)))
           "v=$v" >> $env:GITHUB_OUTPUT
       - run: pip install pyinstaller pywebview
-      - run: pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." --collect-all webview --hidden-import clr dhub.py
+      - uses: ilammy/msvc-dev-cmd@v1
+        continue-on-error: true
+      - name: Overlay-Bibliothek bauen (optional, ein Fehler hier stoppt den Build nicht)
+        continue-on-error: true
+        shell: cmd
+        run: cl /nologo /LD /O2 /EHsc /std:c++17 /utf-8 overlay\dhub_overlay.cpp /Fe:dhub_overlay.dll /link user32.lib gdi32.lib
+      - name: D-Hub.exe bauen
+        shell: pwsh
+        run: |
+          $extra = @()
+          if (Test-Path dhub_overlay.dll) { $extra += "--add-binary", "dhub_overlay.dll;." } else { Write-Host "Overlay-Bibliothek fehlt, Build laeuft ohne sie" }
+          pyinstaller --onefile --noconsole --name D-Hub --icon logo.ico --add-data "logo.png;." --collect-all webview --hidden-import clr @extra dhub.py
       - name: Installer bauen
         shell: pwsh
         env:

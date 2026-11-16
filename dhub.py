@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "hub_data.json")
 PORT = 8766
-VERSION = "3.19"
+VERSION = "3.20"
 IS_WIN = sys.platform == "win32"
 if IS_WIN:
     import winreg
@@ -459,6 +459,87 @@ def wv_runtime():
     return ""
 
 
+DPIMODE = [1]
+COMPAT = [""]
+
+
+def dpi_file():
+    return os.path.join(local_dir(), "dpimode.txt")
+
+
+def dpi_load():
+    """Gemerkter DPI-Modus (1 = System, 0 = aus, 2 = pro Monitor) und die schon erfolglos probierten Modi."""
+    try:
+        m, tried = open(dpi_file()).read().strip().split("|")
+        return int(m), [int(x) for x in tried.split(",") if x != ""]
+    except Exception:
+        return 1, []
+
+
+def dpi_save(mode, tried):
+    try:
+        open(dpi_file(), "w").write("%d|%s" % (mode, ",".join(str(x) for x in tried)))
+    except Exception:
+        pass
+
+
+def dpi_apply(mode):
+    import ctypes
+    try:
+        if mode == 2:
+            try:
+                ctypes.windll.user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+                if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                    return
+            except Exception:
+                pass
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        elif mode == 0:
+            ctypes.windll.shcore.SetProcessDpiAwareness(0)
+        else:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception as e:
+        log("dpi_apply(%s): %s" % (mode, e))
+
+
+def compat_info():
+    """Kompatibilitaets-Einstellungen von Windows, die den Browserprozess des Fensters auf eine andere DPI-Einstellung zwingen koennen."""
+    out = []
+    try:
+        import winreg
+        for hive, hn in ((winreg.HKEY_CURRENT_USER, "HKCU"), (winreg.HKEY_LOCAL_MACHINE, "HKLM")):
+            try:
+                with winreg.OpenKey(hive, r"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers") as k:
+                    i = 0
+                    while True:
+                        try:
+                            name, val, _ = winreg.EnumValue(k, i)
+                        except OSError:
+                            break
+                        i += 1
+                        low = name.lower()
+                        if "msedgewebview2" in low or "d-hub" in low:
+                            out.append("%s %s = %s" % (hn, os.path.basename(name), val))
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return "; ".join(out)
+
+
+def relaunch(why):
+    exe = sys.executable
+    cmd = '"%s"' % exe if getattr(sys, "frozen", False) else '"%s" "%s"' % (exe, os.path.abspath(__file__))
+    env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "__COMPAT_LAYER")}
+    log("Neustart: " + why)
+    try:
+        subprocess.Popen(["cmd", "/c", "ping -n 3 127.0.0.1 >nul & " + cmd], env=env, creationflags=0x08000008, close_fds=True)
+    except Exception as e:
+        log("relaunch: %s" % e)
+        return
+    os._exit(0)
+
+
 def relaunch_nogpu():
     """Fenster blieb leer: einmal ohne GPU-Beschleunigung neu starten (haeufigste Ursache fuer ein schwarzes WebView2-Fenster)."""
     try:
@@ -519,10 +600,10 @@ def run_window(url):
             os.remove(os.path.join(local_dir(), "nogpu.flag"))  # alter Merker aus 3.16 bis 3.18: die GPU war nicht die Ursache
         except Exception:
             pass
-        data = os.path.join(local_dir(), "webview-data")
+        data = os.path.join(local_dir(), "webview-data" if DPIMODE[0] == 1 else "webview-data-dpi%d" % DPIMODE[0])
         if os.path.exists(os.path.join(local_dir(), "nogpu2.flag")) or os.environ.get("DHUB_NOGPU"):
             NOGPU[0] = True
-            data = os.path.join(local_dir(), "webview-data-nogpu")  # eigenes Profil: gleiche Ordner mit anderen Startoptionen lassen WebView2 scheitern
+            data += "-nogpu"  # eigenes Profil: gleiche Ordner mit anderen Startoptionen lassen WebView2 scheitern
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--disable-gpu --disable-gpu-compositing"
         try:
             win.events.loaded += lambda: log("Seite im Fenster geladen")
@@ -558,6 +639,7 @@ def run_window(url):
                     os.remove(guard)
                 except Exception:
                     pass
+                dpi_save(DPIMODE[0], [])
                 return
             try:
                 loaded = win.events.loaded.is_set()
@@ -565,6 +647,17 @@ def run_window(url):
                 loaded = None
             dpi = dpi_info("D-Hub")
             log("Fenster blieb leer (Seite geladen: %s, DPI: %s, Fehler der Fenster-Komponente: %s)" % (loaded, dpi, " / ".join(WVLOG) or "keine"))
+            if WVLOG and COMPAT[0] and not os.environ.get("DHUB_CLEAN"):
+                os.environ["DHUB_CLEAN"] = "1"
+                relaunch("Fenster-Fehler mit Setup-Umgebung %r, neuer Versuch ohne sie" % COMPAT[0])
+            if any("8007139F" in x.upper() for x in WVLOG):
+                # WebView2: DPI-Einstellung von Fenster und Browserprozess passen nicht. Die anderen Modi der Reihe nach probieren.
+                tried = sorted(set(dpi_load()[1]) | {DPIMODE[0]})
+                nxt = next((m for m in (1, 0, 2) if m not in tried), None)
+                if nxt is not None:
+                    dpi_save(nxt, tried)
+                    relaunch("WebView2 0x8007139F im DPI-Modus %d, naechster Versuch mit Modus %d" % (DPIMODE[0], nxt))
+                dpi_save(1, [])
             if not WVLOG and not NOGPU[0]:
                 relaunch_nogpu()
             try:
@@ -576,7 +669,7 @@ def run_window(url):
             def ask_browser():
                 try:
                     import ctypes
-                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft. Bitte ein Foto dieser Meldung schicken.\n\nDPI: " + dpi + "\n\nGrund:\n" + why[:500] + "\n\nProtokoll:\n" + tail[-900:] + "\nZur Not im Browser öffnen?", "D-Hub " + VERSION, 0x24)
+                    r = ctypes.windll.user32.MessageBoxW(0, "Das D-Hub-Fenster bleibt leer, obwohl D-Hub läuft. Bitte ein Foto dieser Meldung schicken.\n\nDPI: " + dpi + " (alle drei Modi probiert)\nSetup-Umgebung: " + (COMPAT[0] or "-") + "\nKompatibilität: " + (compat_info() or "-")[:300] + "\n\nGrund:\n" + why[:400] + "\n\nProtokoll:\n" + tail[-900:] + "\nZur Not im Browser öffnen?", "D-Hub " + VERSION, 0x24)
                     if r == 6:
                         open_window(url)
                 except Exception as e:
@@ -4507,6 +4600,7 @@ function atStop(){clearInterval(atTimer);atTimer=0;try{if(S.atlas)localStorage.s
 
 /* ===== PATCH NOTES (bei jeder Änderung oben ergänzen!) ===== */
 const PATCHES=[
+ {v:'3.20',d:'16.11.2026',t:'Schwarzes Fenster: D-Hub probiert alle DPI-Modi selbst',i:[['Fix','Bricht das Programmfenster mit dem WebView2-Fehler 0x8007139F ab, startet D-Hub von selbst neu und probiert nacheinander die drei DPI-Modi von Windows durch. Der Modus, der funktioniert, wird gemerkt.'],['Fix','Wird D-Hub direkt aus dem Setup gestartet, übernimmt es dessen Kompatibilitäts-Umgebung nicht mehr. Sie konnte den Browserprozess des Fensters stören.'],['Fix','Die Fehlermeldung zeigt jetzt auch Kompatibilitäts-Einstellungen von Windows, falls welche gesetzt sind.']]},
  {v:'3.19',d:'15.11.2026',t:'Schwarzes Fenster: Fehler 0x8007139F',i:[['Fix','Das Programmfenster blieb schwarz, weil WebView2 mit dem Fehler 0x8007139F abbrach. Laut Microsoft ist die häufigste Ursache eine DPI-Einstellung, die nicht zum Browserprozess des Fensters passt. D-Hub legt diese Einstellung jetzt als Allererstes beim Start fest, bevor irgendein Fenster oder Hintergrunddienst entsteht.'],['Fix','Die Grafikbeschleunigung ist wieder an: Sie war nicht die Ursache. Die Fehlermeldung bei leerem Fenster zeigt zusätzlich die DPI-Werte.']]},
  {v:'3.18',d:'15.11.2026',t:'Leeres Fenster meldet sich schneller',i:[['Fix','Bleibt das Programmfenster leer, erscheint jetzt nach rund 15 bis 30 Sekunden eine Meldung mit dem Grund und den letzten Protokollzeilen. Vorher konnte die Prüfung minutenlang hängen, sodass nur ein schwarzes Fenster zu sehen war.']]},
  {v:'3.17',d:'15.11.2026',t:'Schwarzes Fenster: Ursache behoben und sichtbar gemacht',i:[['Fix','In der gebauten D-Hub.exe konnte die Fenster-Komponente ihre Hilfsdatei WebView2Loader.dll nicht finden, dann blieb das Fenster ohne Fehlermeldung schwarz. D-Hub legt die Datei jetzt beim Start an die richtige Stelle.'],['Fix','Fehler der Fenster-Komponente stehen jetzt in dhub.log. Bleibt das Fenster trotzdem leer, zeigt D-Hub den genauen Grund direkt in einer Meldung an.'],['Fix','Der Neustart ohne GPU-Beschleunigung nutzt ein eigenes Fenster-Profil, damit er nicht am alten Profil scheitert.']]},
@@ -5096,12 +5190,12 @@ if __name__ == "__main__":
         # Als Allererstes, bevor irgendein Thread oder Fenster entsteht: Die DPI-Einstellung des Prozesses festlegen.
         # Aendert sie sich erst spaeter (waehrend das Programmfenster entsteht), passt das Fenster nicht mehr zu seinem
         # WebView2-Browserprozess, und WebView2 bricht mit 0x8007139F ab: Das Fenster bleibt schwarz.
-        try:
-            import ctypes
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
-        log("DPI beim Start: " + dpi_info())
+        # Startet D-Hub aus dem Setup heraus, erbt es dessen Kompatibilitaets-Umgebung. Die wuerde auch der
+        # Browserprozess des Fensters erben und dann seine DPI-Einstellung nicht setzen koennen.
+        COMPAT[0] = os.environ.pop("__COMPAT_LAYER", "") or ""
+        DPIMODE[0] = dpi_load()[0]
+        dpi_apply(DPIMODE[0])
+        log("Start %s: DPI-Modus %d (%s), __COMPAT_LAYER=%r, Kompatibilitaet: %s" % (VERSION, DPIMODE[0], dpi_info(), COMPAT[0], compat_info() or "-"))
     url = "http://127.0.0.1:%d" % PORT
     try:  # laeuft D-Hub schon?
         ex = fetch_json(url + "/api/state?probe=1")
